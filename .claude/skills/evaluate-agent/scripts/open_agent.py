@@ -8,9 +8,14 @@
 # ]
 # ///
 """
-Open a live web agent and capture a landing screenshot for one declared case.
+Open a live web agent and capture artifacts for one declared case.
 
-Exits 0 on success; 1 on any manifest, auth, or driver error (printed to stderr).
+Captures a landing screenshot by default. With --submit, also types
+case.input into the agent's primary input field and captures a
+post-submit screenshot.
+
+Exits 0 on success; 1 on any manifest, auth, interaction, or driver
+error (printed to stderr).
 """
 
 from __future__ import annotations
@@ -26,9 +31,11 @@ sys.path.insert(0, str(_SRC_DIR))
 
 from evaluate_agent.driver import (  # noqa: E402
     Capture,
+    InputElementNotFound,
     MissingAuthEnvVar,
     RunArtifactLayout,
     open_session,
+    submit_case_input,
 )
 from evaluate_agent.manifest import (  # noqa: E402
     ManifestError,
@@ -41,7 +48,11 @@ def _parse_args(
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="open_agent",
-        description="Open a live web agent and capture a landing screenshot for one declared case.",
+        description=(
+            "Open a live web agent in a sandboxed "
+            "browser and capture artifacts for one "
+            "declared case."
+        ),
     )
     parser.add_argument(
         "path",
@@ -51,7 +62,16 @@ def _parse_args(
     parser.add_argument(
         "--case",
         required=True,
-        help="Id of the case (under manifest.cases) to associate this run with.",
+        help="Id of the case (under manifest.cases) to run.",
+    )
+    parser.add_argument(
+        "--submit",
+        action="store_true",
+        help=(
+            "After landing capture, type case.input into "
+            "the agent's primary input field, press Enter, "
+            "and capture a post-submit screenshot."
+        ),
     )
     parser.add_argument(
         "--runs-root",
@@ -104,20 +124,53 @@ async def _drive(
             manifest.access,
             headless=not args.headed,
         ) as page:
-            screenshot = await capture.screenshot(
+            landing = await capture.screenshot(
                 page, "landing"
             )
-    except MissingAuthEnvVar as exc:
+            submission: dict[str, object] | None = None
+            if args.submit:
+                selector_used = await submit_case_input(
+                    page,
+                    case_input=case.input,
+                    input_selector=manifest.interaction.input_selector,
+                    response_wait_ms=manifest.interaction.response_wait_ms,
+                )
+                after_submit = await capture.screenshot(
+                    page, "after_submit"
+                )
+                submission = {
+                    "selector_used": selector_used,
+                    "response_wait_ms": manifest.interaction.response_wait_ms,
+                    "screenshot": after_submit,
+                }
+    except (
+        MissingAuthEnvVar,
+        InputElementNotFound,
+    ) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(
-        f"OK: Landing capture complete.\n"
-        f"  agent:               {manifest.name}\n"
-        f"  case:                {case.id}\n"
-        f"  run_dir:             {layout.run_dir}\n"
-        f"  landing_screenshot:  {screenshot}"
+    title = (
+        "Case submission complete."
+        if submission is not None
+        else "Landing capture complete."
     )
+    lines = [
+        f"OK: {title}",
+        f"  agent:                    {manifest.name}",
+        f"  case:                     {case.id}",
+        f"  run_dir:                  {layout.run_dir}",
+        f"  landing_screenshot:       {landing}",
+    ]
+    if submission is not None:
+        lines.extend(
+            [
+                f"  input_selector_used:      {submission['selector_used']}",
+                f"  response_wait_ms:         {submission['response_wait_ms']}",
+                f"  after_submit_screenshot:  {submission['screenshot']}",
+            ]
+        )
+    print("\n".join(lines))
     return 0
 
 

@@ -20,6 +20,7 @@ Top-level fields:
 - `access.url` — the deployed agent's web entry point. Must be `http(s)://…`.
 - `access.auth` (optional) — declares which env vars hold credentials (`type: bearer` with `token_env`, or `type: basic` with `username_env` and `password_env`). NEVER embed literal secrets in the manifest.
 - `observability` (optional) — additional structured trace sources (Langfuse, OTEL). Playwright capture is the always-on baseline regardless of this section.
+- `interaction` (optional) — driver hints for the agent's web UI. `input_selector` is an optional CSS selector for the primary input field (when omitted, the driver falls back to the first visible `<textarea>`, then the first visible `<input type='text'>`). `response_wait_ms` (default 2000, bounded 0–120000) is the wait after submitting `case.input` before the post-submit screenshot.
 - `tools_catalog`, `agents_catalog` (optional) — when declared, case assertions are cross-validated against these at load time. An empty or omitted catalog disables the cross-check.
 - `cases` — scenarios with `id`, `input`, and `assertions` (`must_call`, `must_not_call`, `must_route_to`, `max_steps`, `final_response_contains`).
 
@@ -46,14 +47,14 @@ uv run .claude/skills/evaluate-agent/scripts/validate_manifest.py <path-to-agent
 
 Parses `agent.yaml` and checks it against the schema. Prints a formal summary on success; prints every violation with a dotted path on failure. Exit 0 on success, 1 on any error.
 
-### Open the agent and capture the landing view
+### Open the agent and capture artifacts for one case
 
 ```
 uv run playwright install chromium                              # one-time, per machine
-uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--runs-root <dir>] [--headed]
+uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--submit] [--runs-root <dir>] [--headed]
 ```
 
-Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any error.
+Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
 
 ## When the user asks to evaluate an agent — CRITICAL
 
@@ -65,7 +66,7 @@ Follow these steps in order. Do not skip or reorder them.
 
 3. **Summarise what was validated.** Report back to the user: agent name, number of cases, declared tool count, declared sub-agent count. This confirms which agent you loaded.
 
-4. **Open and capture the landing view** when the user asks for a screenshot, to "see" the agent, or to verify access works. Use the case id the user specified. If they did not give one, list the declared ids and ask. If the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials.
+4. **Open and drive the case.** Invoke `open_agent.py` with the case id. Without `--submit`, the invocation captures the landing view only — use this when the user asks for a screenshot, to "see" the agent, or to verify access works. With `--submit`, the invocation additionally types `case.input` into the agent's primary input field and captures the post-submit screenshot. If the user did not specify a case id, list the declared ids and ask. If the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
 5. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
