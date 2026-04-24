@@ -63,7 +63,7 @@ class InputElementNotFound(RuntimeError):
                 f"To proceed:\n"
                 f"  (1) Open the agent URL in a browser, inspect the primary input field, and copy a CSS selector that resolves to exactly that element on initial page load.\n"
                 f"  (2) Add interaction.input_selector to the manifest with the copied selector.\n"
-                f"  (3) Re-run the invocation. A manifest-declared selector takes precedence over the heuristic; the driver uses your value whenever the selector matches at least one element."
+                f"  (3) Re-run the invocation. A manifest-declared selector takes precedence over the heuristic. If your selector matches at least one element, the driver types case.input into it. If your selector returns zero matches, the driver raises InputElementNotFound with hint-branch recovery — re-inspect the page's rendered DOM (the input may live inside an iframe or a shadow root that CSS selectors cannot reach) and correct the selector."
             )
         super().__init__(message)
 
