@@ -54,7 +54,7 @@ uv run playwright install chromium                              # one-time, per 
 uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--submit] [--runs-root <dir>] [--headed]
 ```
 
-Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
+Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png` paired with a full-DOM snapshot at `<case_dir>/trace/dom/step-001-landing.html`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png` paired with `<case_dir>/trace/dom/step-002-after_submit.html`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
 
 Every invocation also writes baseline trace artifacts alongside the screenshots under `<case_dir>/trace/`:
 
@@ -63,6 +63,7 @@ Every invocation also writes baseline trace artifacts alongside the screenshots 
 - `responses.jsonl` — streaming record of every inbound `response` event (URL, status, status text, headers, UTC timestamp).
 - `console.jsonl` — streaming record of every page `console` message (type, text, source location, UTC timestamp).
 - `page_errors.jsonl` — streaming record of every uncaught `pageerror` (message, UTC timestamp).
+- `dom/step-<NNN>-<label>.html` — serialized rendered DOM (UTF-8 HTML) captured at each labeled screenshot point. Step number and label mirror the paired `.png` so a reader can cross-reference visual evidence with the programmatically inspectable DOM.
 
 The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly.
 

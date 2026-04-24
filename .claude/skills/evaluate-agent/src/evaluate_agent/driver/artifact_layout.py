@@ -17,6 +17,8 @@ _REQUESTS_FILENAME = "requests.jsonl"
 _RESPONSES_FILENAME = "responses.jsonl"
 _CONSOLE_FILENAME = "console.jsonl"
 _PAGE_ERRORS_FILENAME = "page_errors.jsonl"
+_DOM_SNAPSHOTS_SUBDIR = "dom"
+_DOM_SNAPSHOT_EXT = "html"
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,25 @@ class RunArtifactLayout:
             page_errors_path=trace_dir
             / _PAGE_ERRORS_FILENAME,
         )
+
+    def dom_snapshot_dir(self, case_id: str) -> Path:
+        return (
+            self.case_dir(case_id)
+            / _TRACE_SUBDIR
+            / _DOM_SNAPSHOTS_SUBDIR
+        )
+
+    def dom_snapshot_path(
+        self,
+        case_id: str,
+        step_number: int,
+        label: str,
+    ) -> Path:
+        filename = (
+            f"step-{step_number:03d}-{label}"
+            f".{_DOM_SNAPSHOT_EXT}"
+        )
+        return self.dom_snapshot_dir(case_id) / filename
 
 
 __all__ = ["RunArtifactLayout"]

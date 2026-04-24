@@ -10,9 +10,9 @@
 """
 Open a live web agent and capture artifacts for one declared case.
 
-Captures a landing screenshot by default. With --submit, also types
-case.input into the agent's primary input field and captures a
-post-submit screenshot.
+Captures a landing screenshot and DOM snapshot by default. With
+--submit, also types case.input into the agent's primary input field
+and captures a post-submit screenshot and DOM snapshot.
 
 Exits 0 on success; 1 on any manifest, auth, interaction, or driver
 error (printed to stderr).
@@ -31,6 +31,7 @@ sys.path.insert(0, str(_SRC_DIR))
 
 from evaluate_agent.driver import (  # noqa: E402
     Capture,
+    DOMSnapshotter,
     InputElementNotFound,
     MissingAuthEnvVar,
     RunArtifactLayout,
@@ -70,7 +71,8 @@ def _parse_args(
         help=(
             "After landing capture, type case.input into "
             "the agent's primary input field, press Enter, "
-            "and capture a post-submit screenshot."
+            "and capture a post-submit screenshot and "
+            "DOM snapshot."
         ),
     )
     parser.add_argument(
@@ -118,6 +120,9 @@ async def _drive(
         runs_root=args.runs_root,
     )
     capture = Capture(layout=layout, case_id=case.id)
+    dom_snapshotter = DOMSnapshotter(
+        layout=layout, case_id=case.id
+    )
     trace_paths = layout.trace_paths(case.id)
 
     try:
@@ -128,6 +133,9 @@ async def _drive(
             headless=not args.headed,
         ) as session:
             landing = await capture.screenshot(
+                session.page, "landing"
+            )
+            landing_dom = await dom_snapshotter.snapshot(
                 session.page, "landing"
             )
             submission: dict[str, object] | None = None
@@ -141,10 +149,16 @@ async def _drive(
                 after_submit = await capture.screenshot(
                     session.page, "after_submit"
                 )
+                after_submit_dom = (
+                    await dom_snapshotter.snapshot(
+                        session.page, "after_submit"
+                    )
+                )
                 submission = {
                     "selector_used": selector_used,
                     "response_wait_ms": manifest.interaction.response_wait_ms,
                     "screenshot": after_submit,
+                    "dom_snapshot": after_submit_dom,
                 }
     except (
         MissingAuthEnvVar,
@@ -164,6 +178,7 @@ async def _drive(
         f"  case:                     {case.id}",
         f"  run_dir:                  {layout.run_dir}",
         f"  landing_screenshot:       {landing}",
+        f"  landing_dom_snapshot:     {landing_dom}",
     ]
     if submission is not None:
         lines.extend(
@@ -171,6 +186,7 @@ async def _drive(
                 f"  input_selector_used:      {submission['selector_used']}",
                 f"  response_wait_ms:         {submission['response_wait_ms']}",
                 f"  after_submit_screenshot:  {submission['screenshot']}",
+                f"  after_submit_dom:         {submission['dom_snapshot']}",
             ]
         )
     lines.extend(
