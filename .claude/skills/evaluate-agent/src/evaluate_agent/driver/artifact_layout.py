@@ -34,9 +34,7 @@ class RunArtifactLayout:
     @property
     def run_dir(self) -> Path:
         return (
-            self.runs_root
-            / self.agent_name
-            / self.run_id
+            self.runs_root / self.agent_name / self.run_id
         )
 
     def case_dir(self, case_id: str) -> Path:
@@ -48,9 +46,7 @@ class RunArtifactLayout:
         step_number: int,
         label: str,
     ) -> Path:
-        filename = (
-            f"step-{step_number:03d}-{label}.png"
-        )
+        filename = f"step-{step_number:03d}-{label}.png"
         return self.case_dir(case_id) / filename
 
 

@@ -7,12 +7,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from evaluate_agent.manifest.schema import WebAccess
 from playwright.async_api import (
     Page,
     async_playwright,
 )
-
-from evaluate_agent.manifest.schema import WebAccess
 
 from .auth import context_kwargs_for
 

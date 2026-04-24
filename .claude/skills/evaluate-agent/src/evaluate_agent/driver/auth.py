@@ -41,12 +41,8 @@ def context_kwargs_for(
     if isinstance(auth, BasicAuth):
         return {
             "http_credentials": {
-                "username": _require_env(
-                    auth.username_env
-                ),
-                "password": _require_env(
-                    auth.password_env
-                ),
+                "username": _require_env(auth.username_env),
+                "password": _require_env(auth.password_env),
             }
         }
     raise AssertionError(

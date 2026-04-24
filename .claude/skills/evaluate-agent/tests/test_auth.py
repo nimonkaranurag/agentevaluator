@@ -5,7 +5,6 @@ Unit tests for translating manifest access auth into Playwright kwargs.
 from __future__ import annotations
 
 import pytest
-
 from evaluate_agent.driver.auth import (
     MissingAuthEnvVar,
     context_kwargs_for,
@@ -49,9 +48,7 @@ class TestBearer:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("TOK", raising=False)
-        with pytest.raises(
-            MissingAuthEnvVar, match="TOK"
-        ):
+        with pytest.raises(MissingAuthEnvVar, match="TOK"):
             context_kwargs_for(
                 _access(
                     {
@@ -89,9 +86,7 @@ class TestBasic:
     ) -> None:
         monkeypatch.delenv("U", raising=False)
         monkeypatch.setenv("P", "secret")
-        with pytest.raises(
-            MissingAuthEnvVar, match="U"
-        ):
+        with pytest.raises(MissingAuthEnvVar, match="U"):
             context_kwargs_for(
                 _access(
                     {
@@ -107,9 +102,7 @@ class TestBasic:
     ) -> None:
         monkeypatch.setenv("U", "alice")
         monkeypatch.delenv("P", raising=False)
-        with pytest.raises(
-            MissingAuthEnvVar, match="P"
-        ):
+        with pytest.raises(MissingAuthEnvVar, match="P"):
             context_kwargs_for(
                 _access(
                     {

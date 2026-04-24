@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A Claude Skill for evaluating deployed agents by driving them through scenarios in sandboxed browser sessions."
 requires-python = ">=3.12"
 dependencies = [
+    "black>=26.3.1",
     "isort>=5.13",
     "playwright>=1.48",
     "pydantic>=2.7",

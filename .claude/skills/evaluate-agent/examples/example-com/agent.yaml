@@ -9,5 +9,5 @@ access:
 
 cases:
   - id: landing
-    input: "smoke test — input submission is not yet implemented"
+    input: "smoke test input for the driver pipeline"
     assertions: {}

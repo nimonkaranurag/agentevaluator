@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 from evaluate_agent.driver import RunArtifactLayout
 
 
@@ -36,9 +35,7 @@ class TestFactory:
     ) -> None:
         layout = RunArtifactLayout.for_agent(
             agent_name="x",
-            now=datetime(
-                2026, 1, 1, tzinfo=timezone.utc
-            ),
+            now=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
         assert layout.runs_root == Path("runs")
 
@@ -71,17 +68,13 @@ class TestPaths:
             "case_one", 3, "landing"
         )
         assert path.name == "step-003-landing.png"
-        assert path.parent == layout.case_dir(
-            "case_one"
-        )
+        assert path.parent == layout.case_dir("case_one")
 
     def test_screenshot_path_supports_large_step_numbers(
         self,
     ) -> None:
         layout = self._layout()
-        path = layout.screenshot_path(
-            "c", 1234, "lbl"
-        )
+        path = layout.screenshot_path("c", 1234, "lbl")
         assert path.name == "step-1234-lbl.png"
 
 

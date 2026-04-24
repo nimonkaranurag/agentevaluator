@@ -30,6 +30,14 @@ Examples:
 
 ## Invocations
 
+### Discover manifests in a directory tree
+
+```
+uv run .claude/skills/evaluate-agent/scripts/discover_manifests.py [<root>]
+```
+
+Recursively scans `<root>` (defaults to the current directory) for `agent.yaml` and `*.agent.yaml`, validates each, and prints one block per manifest with its path, name, description, and case count. Directories whose name begins with `.` and symlinked subdirectories are skipped. Exit 0 when every discovered manifest validates (including the zero-manifests case); exit 1 when the root is not a directory or any discovered manifest fails validation.
+
 ### Validate a manifest
 
 ```
@@ -51,9 +59,9 @@ Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` f
 
 Follow these steps in order. Do not skip or reorder them.
 
-1. **Locate the manifest.** Look for `agent.yaml` (or `*.agent.yaml`) in the working directory. If multiple candidates exist, list them and ask the user which one to use. Do not guess.
+1. **Locate the manifest.** Run `discover_manifests.py` against the working directory. If it reports exactly one valid manifest, use that path. If it reports multiple, list the paths with their `name` and `description` and ask the user which one to evaluate — do not guess. If it reports zero manifests, relay the formatter's output to the user and STOP. If it reports any invalid manifest, relay the formatter's stderr verbatim and STOP.
 
-2. **Validate the manifest.** Run `validate_manifest.py` against the chosen path. If validation fails, relay the validator's stderr to the user verbatim and STOP. A partially valid manifest is never passed downstream.
+2. **Validate the chosen manifest.** Run `validate_manifest.py` against the chosen path to confirm it parses cleanly in isolation. If validation fails, relay the validator's stderr to the user verbatim and STOP. A partially valid manifest is never passed downstream.
 
 3. **Summarise what was validated.** Report back to the user: agent name, number of cases, declared tool count, declared sub-agent count. This confirms which agent you loaded.
 
