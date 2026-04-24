@@ -16,13 +16,14 @@ from .errors import (
     ManifestValidationError,
 )
 from .loader import load_manifest
-from .schema import AgentManifest
+from .schema import AgentManifest, InteractionConfig
 
 __all__ = [
     "AgentManifest",
     "DiscoveredManifest",
     "DiscoveryFailure",
     "DiscoveryOutcome",
+    "InteractionConfig",
     "ManifestDiscoveryRootError",
     "ManifestError",
     "ManifestNotFoundError",

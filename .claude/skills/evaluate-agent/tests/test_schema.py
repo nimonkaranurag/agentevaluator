@@ -248,3 +248,87 @@ class TestStrictness:
             ValidationError, match="[Ee]xtra"
         ):
             AgentManifest.model_validate(data)
+
+
+class TestInteractionConfig:
+    def test_defaults_when_section_omitted(
+        self,
+    ) -> None:
+        m = AgentManifest.model_validate(
+            _minimal_manifest_dict()
+        )
+        assert m.interaction.input_selector is None
+        assert m.interaction.response_wait_ms == 2000
+
+    def test_input_selector_accepts_non_empty_string(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {
+            "input_selector": "#chat-input"
+        }
+        m = AgentManifest.model_validate(data)
+        assert m.interaction.input_selector == "#chat-input"
+
+    def test_input_selector_rejects_empty_string(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"input_selector": ""}
+        with pytest.raises(ValidationError):
+            AgentManifest.model_validate(data)
+
+    def test_response_wait_ms_accepts_zero(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"response_wait_ms": 0}
+        m = AgentManifest.model_validate(data)
+        assert m.interaction.response_wait_ms == 0
+
+    def test_response_wait_ms_accepts_upper_bound(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"response_wait_ms": 120_000}
+        m = AgentManifest.model_validate(data)
+        assert m.interaction.response_wait_ms == 120_000
+
+    def test_response_wait_ms_rejects_negative(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"response_wait_ms": -1}
+        with pytest.raises(ValidationError):
+            AgentManifest.model_validate(data)
+
+    def test_response_wait_ms_rejects_above_upper_bound(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"response_wait_ms": 120_001}
+        with pytest.raises(ValidationError):
+            AgentManifest.model_validate(data)
+
+    def test_rejects_extra_keys(self) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {"typo_field": "oops"}
+        with pytest.raises(
+            ValidationError, match="[Ee]xtra"
+        ):
+            AgentManifest.model_validate(data)
+
+    def test_fully_populated_interaction_validates(
+        self,
+    ) -> None:
+        data = _minimal_manifest_dict()
+        data["interaction"] = {
+            "input_selector": "textarea[name='q']",
+            "response_wait_ms": 5000,
+        }
+        m = AgentManifest.model_validate(data)
+        assert (
+            m.interaction.input_selector
+            == "textarea[name='q']"
+        )
+        assert m.interaction.response_wait_ms == 5000

@@ -105,6 +105,39 @@ class Observability(_Strict):
     otel: OtelSource | None = None
 
 
+class InteractionConfig(_Strict):
+    input_selector: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "CSS selector for the agent's primary "
+                "input field. When set, the driver locates "
+                "this element before typing case.input. "
+                "When omitted, the driver falls back to "
+                "the first visible <textarea>, then the "
+                "first visible <input type='text'>."
+            ),
+        ),
+    ]
+    response_wait_ms: Annotated[
+        int,
+        Field(
+            default=2000,
+            ge=0,
+            le=120_000,
+            description=(
+                "Milliseconds to wait after submitting "
+                "case.input before capturing the "
+                "post-submit screenshot. Tune up for "
+                "agents whose response takes longer to "
+                "render; tune down for fast agents."
+            ),
+        ),
+    ]
+
+
 class Assertions(_Strict):
     must_call: list[Identifier] = Field(
         default_factory=list
@@ -148,6 +181,9 @@ class AgentManifest(_Strict):
     access: WebAccess
     observability: Observability = Field(
         default_factory=Observability
+    )
+    interaction: InteractionConfig = Field(
+        default_factory=InteractionConfig
     )
     tools_catalog: list[Identifier] = Field(
         default_factory=list
@@ -210,6 +246,7 @@ __all__ = [
     "BearerAuth",
     "Case",
     "Identifier",
+    "InteractionConfig",
     "LangfuseSource",
     "Observability",
     "OtelSource",
