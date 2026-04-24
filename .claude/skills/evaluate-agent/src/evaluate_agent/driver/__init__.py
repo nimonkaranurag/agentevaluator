@@ -12,6 +12,11 @@ from .capture import (
     InvalidCaptureLabel,
     Screenshotable,
 )
+from .dom_snapshot import (
+    DOMSnapshotable,
+    DOMSnapshotter,
+    InvalidDOMSnapshotLabel,
+)
 from .interact import (
     InputElementNotFound,
     submit_case_input,
@@ -27,8 +32,11 @@ from .trace import (
 
 __all__ = [
     "Capture",
+    "DOMSnapshotable",
+    "DOMSnapshotter",
     "InputElementNotFound",
     "InvalidCaptureLabel",
+    "InvalidDOMSnapshotLabel",
     "MissingAuthEnvVar",
     "PageEventEmitter",
     "RunArtifactLayout",

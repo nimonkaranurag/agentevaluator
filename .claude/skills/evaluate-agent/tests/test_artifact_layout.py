@@ -128,6 +128,53 @@ class TestTracePaths:
         assert first.trace_dir != second.trace_dir
 
 
+class TestDOMSnapshotPaths:
+    def _layout(self) -> RunArtifactLayout:
+        return RunArtifactLayout(
+            runs_root=Path("/tmp/runs"),
+            agent_name="my-agent",
+            run_id="20260424T000000Z",
+        )
+
+    def test_dom_snapshot_dir_sits_under_trace(
+        self,
+    ) -> None:
+        layout = self._layout()
+        assert (
+            layout.dom_snapshot_dir("case_one")
+            == layout.case_dir("case_one") / "trace" / "dom"
+        )
+
+    def test_dom_snapshot_path_zero_pads_step_number(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.dom_snapshot_path(
+            "case_one", 3, "landing"
+        )
+        assert path.name == "step-003-landing.html"
+        assert path.parent == layout.dom_snapshot_dir(
+            "case_one"
+        )
+
+    def test_dom_snapshot_path_supports_large_step_numbers(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.dom_snapshot_path(
+            "case_one", 1234, "final"
+        )
+        assert path.name == "step-1234-final.html"
+
+    def test_different_cases_get_separate_dom_dirs(
+        self,
+    ) -> None:
+        layout = self._layout()
+        first = layout.dom_snapshot_dir("case_one")
+        second = layout.dom_snapshot_dir("case_two")
+        assert first != second
+
+
 class TestImmutability:
     def test_layout_is_frozen(self) -> None:
         layout = RunArtifactLayout(
