@@ -35,9 +35,7 @@ Identifier = Annotated[
 
 
 class _Strict(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid", frozen=True
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class BearerAuth(_Strict):
@@ -115,9 +113,7 @@ class Assertions(_Strict):
         default_factory=list
     )
     must_route_to: Identifier | None = None
-    max_steps: int | None = Field(
-        default=None, ge=1
-    )
+    max_steps: int | None = Field(default=None, ge=1)
     final_response_contains: str | None = Field(
         default=None, min_length=1
     )

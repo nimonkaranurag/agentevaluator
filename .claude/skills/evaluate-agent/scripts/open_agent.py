@@ -77,11 +77,7 @@ async def _drive(
         return 1
 
     case = next(
-        (
-            c
-            for c in manifest.cases
-            if c.id == args.case
-        ),
+        (c for c in manifest.cases if c.id == args.case),
         None,
     )
     if case is None:
@@ -101,9 +97,7 @@ async def _drive(
         agent_name=manifest.name,
         runs_root=args.runs_root,
     )
-    capture = Capture(
-        layout=layout, case_id=case.id
-    )
+    capture = Capture(layout=layout, case_id=case.id)
 
     try:
         async with open_session(

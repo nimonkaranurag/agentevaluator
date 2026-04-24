@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-
 from evaluate_agent.driver.artifact_layout import (
     RunArtifactLayout,
 )
@@ -24,9 +23,7 @@ class FakePage:
         default_factory=list
     )
 
-    async def screenshot(
-        self, *, path: str
-    ) -> None:
+    async def screenshot(self, *, path: str) -> None:
         Path(path).write_bytes(b"")
         self.screenshots_taken.append(path)
 
@@ -44,9 +41,7 @@ class TestScreenshotStepNumbering:
     async def test_first_screenshot_is_step_001(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(
-            layout=layout, case_id="case"
-        )
+        capture = Capture(layout=layout, case_id="case")
         path = await capture.screenshot(
             FakePage(), "landing"
         )
@@ -55,9 +50,7 @@ class TestScreenshotStepNumbering:
     async def test_step_counter_increments_across_calls(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(
-            layout=layout, case_id="case"
-        )
+        capture = Capture(layout=layout, case_id="case")
         page = FakePage()
         p1 = await capture.screenshot(page, "a")
         p2 = await capture.screenshot(page, "b")
@@ -71,9 +64,7 @@ class TestArtifactPath:
     async def test_creates_case_directory_lazily(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(
-            layout=layout, case_id="case"
-        )
+        capture = Capture(layout=layout, case_id="case")
         path = await capture.screenshot(
             FakePage(), "landing"
         )
@@ -83,13 +74,9 @@ class TestArtifactPath:
     async def test_screenshot_written_to_returned_path(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(
-            layout=layout, case_id="case"
-        )
+        capture = Capture(layout=layout, case_id="case")
         page = FakePage()
-        path = await capture.screenshot(
-            page, "landing"
-        )
+        path = await capture.screenshot(page, "landing")
         assert page.screenshots_taken == [str(path)]
 
 
@@ -103,10 +90,6 @@ class TestLabelValidation:
         layout: RunArtifactLayout,
         bad_label: str,
     ) -> None:
-        capture = Capture(
-            layout=layout, case_id="c"
-        )
+        capture = Capture(layout=layout, case_id="c")
         with pytest.raises(InvalidCaptureLabel):
-            await capture.screenshot(
-                FakePage(), bad_label
-            )
+            await capture.screenshot(FakePage(), bad_label)

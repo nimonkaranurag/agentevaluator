@@ -36,9 +36,7 @@ class InvalidCaptureLabel(ValueError):
 class Capture:
     layout: RunArtifactLayout
     case_id: str
-    _step: int = field(
-        default=0, init=False, repr=False
-    )
+    _step: int = field(default=0, init=False, repr=False)
 
     async def screenshot(
         self,
@@ -51,9 +49,7 @@ class Capture:
         path = self.layout.screenshot_path(
             self.case_id, self._step, label
         )
-        path.parent.mkdir(
-            parents=True, exist_ok=True
-        )
+        path.parent.mkdir(parents=True, exist_ok=True)
         await page.screenshot(path=str(path))
         return path
 
