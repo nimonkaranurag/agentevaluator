@@ -1,0 +1,48 @@
+# Example manifest for a flight-booking agent.
+# Fields commented out below are optional; the schema enforces everything else.
+
+name: flight-booking-agent
+description: Customer-facing flight search, quote, and booking assistant.
+
+access:
+  url: https://flight-agent.example.com/chat
+  # auth:
+  #   type: bearer
+  #   token_env: FLIGHT_AGENT_TOKEN
+
+# observability is optional. Playwright capture (HAR, DOM, screenshots) is
+# the always-on baseline; the sources below, if declared, enrich it with
+# structured spans.
+# observability:
+#   langfuse:
+#     host: https://cloud.langfuse.com
+#   otel:
+#     endpoint: https://otel.example.com/v1/traces
+
+tools_catalog:
+  - search_flights
+  - get_price_quote
+  - book_flight
+  - issue_refund
+
+agents_catalog:
+  - search_agent
+  - booking_agent
+  - refund_agent
+
+cases:
+  - id: book_jfk_lhr_next_friday
+    input: "Book me JFK to LHR next Friday, economy, one passenger."
+    assertions:
+      must_call: [search_flights, book_flight]
+      must_not_call: [issue_refund]
+      must_route_to: booking_agent
+      max_steps: 6
+      final_response_contains: "confirmation number"
+
+  - id: refund_past_booking
+    input: "I need to refund my booking from last week, confirmation ABC123."
+    assertions:
+      must_call: [issue_refund]
+      must_route_to: refund_agent
+      max_steps: 4

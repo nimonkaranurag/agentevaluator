@@ -1,0 +1,6 @@
+name: minimal-agent
+access:
+  url: https://example.com/chat
+cases:
+  - id: only_case
+    input: "hello world"

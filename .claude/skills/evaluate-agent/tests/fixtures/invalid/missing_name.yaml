@@ -1,0 +1,6 @@
+# name is required and deliberately missing in this fixture
+access:
+  url: https://example.com/chat
+cases:
+  - id: c
+    input: hi

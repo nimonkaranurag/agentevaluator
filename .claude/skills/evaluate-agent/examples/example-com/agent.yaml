@@ -1,0 +1,13 @@
+# Smoke-test manifest. Points at https://example.com so the driver pipeline
+# can be exercised end-to-end without needing a real agent deployment.
+
+name: example-com-smoke
+description: Smoke-test target for the driver pipeline.
+
+access:
+  url: https://example.com/
+
+cases:
+  - id: landing
+    input: "smoke test — input submission is not yet implemented"
+    assertions: {}

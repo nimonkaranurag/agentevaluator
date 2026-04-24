@@ -1,0 +1,32 @@
+[project]
+name = "agentevaluator"
+version = "0.1.0"
+description = "A Claude Skill for evaluating deployed agents by driving them through scenarios in sandboxed browser sessions."
+requires-python = ">=3.12"
+dependencies = [
+    "isort>=5.13",
+    "playwright>=1.48",
+    "pydantic>=2.7",
+    "pyyaml>=6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.uv]
+package = false
+
+[tool.black]
+line-length = 60
+
+[tool.isort]
+profile = "black"
+line_length = 60
+
+[tool.pytest.ini_options]
+testpaths = [".claude/skills/evaluate-agent/tests"]
+pythonpath = [".claude/skills/evaluate-agent/src"]
+asyncio_mode = "auto"
