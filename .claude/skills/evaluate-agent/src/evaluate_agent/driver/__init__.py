@@ -7,6 +7,11 @@ from .auth import (
     MissingAuthEnvVar,
     context_kwargs_for,
 )
+from .auto_dom_snapshot import (
+    AutoDOMSnapshotCollector,
+    AutoDOMSnapshotCollectorAlreadyAttached,
+    NavigatedFrame,
+)
 from .capture import (
     Capture,
     InvalidCaptureLabel,
@@ -31,6 +36,8 @@ from .trace import (
 )
 
 __all__ = [
+    "AutoDOMSnapshotCollector",
+    "AutoDOMSnapshotCollectorAlreadyAttached",
     "Capture",
     "DOMSnapshotable",
     "DOMSnapshotter",
@@ -38,6 +45,7 @@ __all__ = [
     "InvalidCaptureLabel",
     "InvalidDOMSnapshotLabel",
     "MissingAuthEnvVar",
+    "NavigatedFrame",
     "PageEventEmitter",
     "RunArtifactLayout",
     "Screenshotable",

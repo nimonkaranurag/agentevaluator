@@ -19,6 +19,8 @@ _CONSOLE_FILENAME = "console.jsonl"
 _PAGE_ERRORS_FILENAME = "page_errors.jsonl"
 _DOM_SNAPSHOTS_SUBDIR = "dom"
 _DOM_SNAPSHOT_EXT = "html"
+_EXPLICIT_DOM_PREFIX = "step"
+_AUTO_DOM_PREFIX = "auto"
 
 
 @dataclass(frozen=True)
@@ -87,8 +89,20 @@ class RunArtifactLayout:
         label: str,
     ) -> Path:
         filename = (
-            f"step-{step_number:03d}-{label}"
-            f".{_DOM_SNAPSHOT_EXT}"
+            f"{_EXPLICIT_DOM_PREFIX}-{step_number:03d}-"
+            f"{label}.{_DOM_SNAPSHOT_EXT}"
+        )
+        return self.dom_snapshot_dir(case_id) / filename
+
+    def auto_dom_snapshot_path(
+        self,
+        case_id: str,
+        step_number: int,
+        event_suffix: str,
+    ) -> Path:
+        filename = (
+            f"{_AUTO_DOM_PREFIX}-{step_number:03d}-"
+            f"{event_suffix}.{_DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
 

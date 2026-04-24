@@ -175,6 +175,67 @@ class TestDOMSnapshotPaths:
         assert first != second
 
 
+class TestAutoDOMSnapshotPaths:
+    def _layout(self) -> RunArtifactLayout:
+        return RunArtifactLayout(
+            runs_root=Path("/tmp/runs"),
+            agent_name="my-agent",
+            run_id="20260424T000000Z",
+        )
+
+    def test_auto_dom_snapshot_path_sits_in_shared_dom_dir(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_dom_snapshot_path(
+            "case_one", 1, "nav"
+        )
+        assert path.parent == layout.dom_snapshot_dir(
+            "case_one"
+        )
+
+    def test_auto_dom_snapshot_path_uses_auto_prefix(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_dom_snapshot_path(
+            "case_one", 1, "nav"
+        )
+        assert path.name == "auto-001-nav.html"
+
+    def test_auto_dom_snapshot_path_zero_pads_step_number(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_dom_snapshot_path(
+            "case_one", 7, "nav"
+        )
+        assert path.name == "auto-007-nav.html"
+
+    def test_auto_dom_snapshot_path_supports_large_step_numbers(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_dom_snapshot_path(
+            "case_one", 2048, "nav"
+        )
+        assert path.name == "auto-2048-nav.html"
+
+    def test_auto_and_explicit_paths_are_distinct(
+        self,
+    ) -> None:
+        layout = self._layout()
+        auto_path = layout.auto_dom_snapshot_path(
+            "c", 1, "nav"
+        )
+        explicit_path = layout.dom_snapshot_path(
+            "c", 1, "nav"
+        )
+        assert auto_path != explicit_path
+        assert auto_path.name.startswith("auto-")
+        assert explicit_path.name.startswith("step-")
+
+
 class TestImmutability:
     def test_layout_is_frozen(self) -> None:
         layout = RunArtifactLayout(

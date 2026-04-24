@@ -124,6 +124,7 @@ async def _drive(
         layout=layout, case_id=case.id
     )
     trace_paths = layout.trace_paths(case.id)
+    auto_dom_dir = layout.dom_snapshot_dir(case.id)
 
     try:
         async with open_session(
@@ -189,6 +190,11 @@ async def _drive(
                 f"  after_submit_dom:         {submission['dom_snapshot']}",
             ]
         )
+    auto_dom_snapshots = (
+        sorted(auto_dom_dir.glob("auto-*.html"))
+        if auto_dom_dir.is_dir()
+        else []
+    )
     lines.extend(
         [
             f"  trace_dir:                {trace_paths.trace_dir}",
@@ -197,8 +203,15 @@ async def _drive(
             f"  trace_responses:          {trace_paths.responses_path}",
             f"  trace_console:            {trace_paths.console_path}",
             f"  trace_page_errors:        {trace_paths.page_errors_path}",
+            f"  auto_dom_snapshots:       {len(auto_dom_snapshots)} captured",
         ]
     )
+    for index, path in enumerate(
+        auto_dom_snapshots, start=1
+    ):
+        lines.append(
+            f"  auto_dom_snapshot[{index}]:     {path}"
+        )
     print("\n".join(lines))
     return 0
 
