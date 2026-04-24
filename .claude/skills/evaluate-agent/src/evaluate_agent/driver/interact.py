@@ -33,6 +33,10 @@ _HEURISTIC_SELECTORS: tuple[str, ...] = (
 )
 
 
+def _describe_heuristics() -> str:
+    return ", ".join(repr(s) for s in _HEURISTIC_SELECTORS)
+
+
 class InputElementNotFound(RuntimeError):
     def __init__(
         self,
@@ -59,13 +63,9 @@ class InputElementNotFound(RuntimeError):
                 f"To proceed:\n"
                 f"  (1) Open the agent URL in a browser, inspect the primary input field, and copy a CSS selector that resolves to exactly that element on initial page load.\n"
                 f"  (2) Add interaction.input_selector to the manifest with the copied selector.\n"
-                f"  (3) Re-run the invocation. A manifest-declared selector wins over the heuristic, so the driver will use your value."
+                f"  (3) Re-run the invocation. A manifest-declared selector takes precedence over the heuristic. If your selector matches at least one element, the driver types case.input into it. If your selector returns zero matches, the driver raises InputElementNotFound with hint-branch recovery — re-inspect the page's rendered DOM (the input may live inside an iframe or a shadow root that CSS selectors cannot reach) and correct the selector."
             )
         super().__init__(message)
-
-
-def _describe_heuristics() -> str:
-    return ", ".join(repr(s) for s in _HEURISTIC_SELECTORS)
 
 
 @dataclass(frozen=True)
@@ -106,6 +106,9 @@ async def submit_case_input(
     input_selector: str | None = None,
     response_wait_ms: int = 2000,
 ) -> str:
+    """
+    Return the CSS selector used to locate the input field.
+    """
     resolved = await _resolve_input(
         page=page, hint=input_selector
     )
