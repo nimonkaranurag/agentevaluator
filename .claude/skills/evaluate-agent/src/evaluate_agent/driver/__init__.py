@@ -16,15 +16,28 @@ from .interact import (
     InputElementNotFound,
     submit_case_input,
 )
-from .session import open_session
+from .session import Session, open_session
+from .trace import (
+    PageEventEmitter,
+    TraceArtifactPaths,
+    TraceCollector,
+    TraceCollectorAlreadyAttached,
+    collect_trace,
+)
 
 __all__ = [
     "Capture",
     "InputElementNotFound",
     "InvalidCaptureLabel",
     "MissingAuthEnvVar",
+    "PageEventEmitter",
     "RunArtifactLayout",
     "Screenshotable",
+    "Session",
+    "TraceArtifactPaths",
+    "TraceCollector",
+    "TraceCollectorAlreadyAttached",
+    "collect_trace",
     "context_kwargs_for",
     "open_session",
     "submit_case_input",

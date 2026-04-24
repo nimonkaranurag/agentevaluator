@@ -56,6 +56,16 @@ uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> 
 
 Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
 
+Every invocation also writes baseline trace artifacts alongside the screenshots under `<case_dir>/trace/`:
+
+- `network.har` — HTTP archive of the full browser session (request/response bodies embedded).
+- `requests.jsonl` — streaming record of every outbound `request` event (method, URL, resource type, headers, UTC timestamp).
+- `responses.jsonl` — streaming record of every inbound `response` event (URL, status, status text, headers, UTC timestamp).
+- `console.jsonl` — streaming record of every page `console` message (type, text, source location, UTC timestamp).
+- `page_errors.jsonl` — streaming record of every uncaught `pageerror` (message, UTC timestamp).
+
+The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly.
+
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
@@ -73,6 +83,6 @@ Follow these steps in order. Do not skip or reorder them.
 ## Design principles
 
 - **Web-only access.** A PM who builds an agent in a UI should not need a CLI to evaluate it.
-- **Observability is opt-in.** Playwright capture (HAR, DOM, screenshots) is the always-on baseline; declared sources only enrich it. Do not ask the user to configure tracing.
+- **Observability is opt-in.** Playwright capture (network HAR, page event streams, screenshots) is the always-on baseline; declared sources under `observability` only enrich it. Do not ask the user to configure tracing.
 - **Deterministic sub-flows.** Every sub-flow that can be scripted is a Python script invoked directly. Your role is only the parts that genuinely need judgment (analytical synthesis in the report).
 - **Grounded output.** When producing narrative, every claim cites a concrete artifact — a screenshot path, a trace span id, or a manifest field.
