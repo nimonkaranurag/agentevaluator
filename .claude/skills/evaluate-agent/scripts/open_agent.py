@@ -118,25 +118,28 @@ async def _drive(
         runs_root=args.runs_root,
     )
     capture = Capture(layout=layout, case_id=case.id)
+    trace_paths = layout.trace_paths(case.id)
 
     try:
         async with open_session(
             manifest.access,
+            layout=layout,
+            case_id=case.id,
             headless=not args.headed,
-        ) as page:
+        ) as session:
             landing = await capture.screenshot(
-                page, "landing"
+                session.page, "landing"
             )
             submission: dict[str, object] | None = None
             if args.submit:
                 selector_used = await submit_case_input(
-                    page,
+                    session.page,
                     case_input=case.input,
                     input_selector=manifest.interaction.input_selector,
                     response_wait_ms=manifest.interaction.response_wait_ms,
                 )
                 after_submit = await capture.screenshot(
-                    page, "after_submit"
+                    session.page, "after_submit"
                 )
                 submission = {
                     "selector_used": selector_used,
@@ -170,6 +173,16 @@ async def _drive(
                 f"  after_submit_screenshot:  {submission['screenshot']}",
             ]
         )
+    lines.extend(
+        [
+            f"  trace_dir:                {trace_paths.trace_dir}",
+            f"  trace_har:                {trace_paths.har_path}",
+            f"  trace_requests:           {trace_paths.requests_path}",
+            f"  trace_responses:          {trace_paths.responses_path}",
+            f"  trace_console:            {trace_paths.console_path}",
+            f"  trace_page_errors:        {trace_paths.page_errors_path}",
+        ]
+    )
     print("\n".join(lines))
     return 0
 

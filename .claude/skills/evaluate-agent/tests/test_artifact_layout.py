@@ -78,6 +78,56 @@ class TestPaths:
         assert path.name == "step-1234-lbl.png"
 
 
+class TestTracePaths:
+    def _layout(self) -> RunArtifactLayout:
+        return RunArtifactLayout(
+            runs_root=Path("/tmp/runs"),
+            agent_name="my-agent",
+            run_id="20260424T000000Z",
+        )
+
+    def test_trace_dir_lives_under_case_dir(
+        self,
+    ) -> None:
+        layout = self._layout()
+        paths = layout.trace_paths("case_one")
+        assert (
+            paths.trace_dir
+            == layout.case_dir("case_one") / "trace"
+        )
+
+    def test_har_filename_is_network_har(self) -> None:
+        layout = self._layout()
+        paths = layout.trace_paths("case_one")
+        assert paths.har_path.name == "network.har"
+        assert paths.har_path.parent == paths.trace_dir
+
+    def test_jsonl_streams_sit_alongside_har(
+        self,
+    ) -> None:
+        layout = self._layout()
+        paths = layout.trace_paths("case_one")
+        for streaming_path, expected_name in (
+            (paths.requests_path, "requests.jsonl"),
+            (paths.responses_path, "responses.jsonl"),
+            (paths.console_path, "console.jsonl"),
+            (
+                paths.page_errors_path,
+                "page_errors.jsonl",
+            ),
+        ):
+            assert streaming_path.name == expected_name
+            assert streaming_path.parent == paths.trace_dir
+
+    def test_different_cases_get_separate_trace_dirs(
+        self,
+    ) -> None:
+        layout = self._layout()
+        first = layout.trace_paths("case_one")
+        second = layout.trace_paths("case_two")
+        assert first.trace_dir != second.trace_dir
+
+
 class TestImmutability:
     def test_layout_is_frozen(self) -> None:
         layout = RunArtifactLayout(
