@@ -14,13 +14,13 @@ from playwright.async_api import (
     async_playwright,
 )
 
-from .artifact_layout import RunArtifactLayout
+from ..artifact_layout import (
+    RunArtifactLayout,
+    TraceArtifactPaths,
+)
 from .auth import context_kwargs_for
 from .auto_dom_snapshot import AutoDOMSnapshotCollector
-from .trace import (
-    TraceArtifactPaths,
-    collect_trace,
-)
+from .trace import collect_trace
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pytest
-from evaluate_agent.driver.artifact_layout import (
+from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
 from evaluate_agent.driver.auto_dom_snapshot import (

@@ -8,9 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .trace import TraceArtifactPaths
-
-_RUN_ID_FORMAT = "%Y%m%dT%H%M%SZ"
+RUN_ID_FORMAT = "%Y%m%dT%H%M%SZ"
 _TRACE_SUBDIR = "trace"
 _HAR_FILENAME = "network.har"
 _REQUESTS_FILENAME = "requests.jsonl"
@@ -23,11 +21,49 @@ _EXPLICIT_DOM_PREFIX = "step"
 _AUTO_DOM_PREFIX = "auto"
 
 
+class InvalidRunId(ValueError):
+    def __init__(self, value: str) -> None:
+        self.value = value
+        super().__init__(
+            f"Run id {value!r} is not formatted as "
+            f"YYYYMMDDTHHMMSSZ (UTC, e.g. "
+            f"20260425T173000Z).\n"
+            f"To proceed:\n"
+            f"  (1) Confirm the run id was produced by "
+            f"RunArtifactLayout.for_agent or copied "
+            f"verbatim from a swarm plan's run_id "
+            f"field.\n"
+            f"  (2) If the value was supplied via "
+            f"--run-id on a CLI invocation, fix the "
+            f"argument or omit the flag to default to "
+            f"the current UTC clock."
+        )
+
+
+@dataclass(frozen=True)
+class TraceArtifactPaths:
+    trace_dir: Path
+    har_path: Path
+    requests_path: Path
+    responses_path: Path
+    console_path: Path
+    page_errors_path: Path
+
+    def ensure_dir(self) -> None:
+        self.trace_dir.mkdir(parents=True, exist_ok=True)
+
+
 @dataclass(frozen=True)
 class RunArtifactLayout:
     runs_root: Path
     agent_name: str
     run_id: str
+
+    def __post_init__(self) -> None:
+        try:
+            datetime.strptime(self.run_id, RUN_ID_FORMAT)
+        except ValueError as exc:
+            raise InvalidRunId(self.run_id) from exc
 
     @classmethod
     def for_agent(
@@ -40,7 +76,20 @@ class RunArtifactLayout:
         return cls(
             runs_root=runs_root,
             agent_name=agent_name,
-            run_id=clock.strftime(_RUN_ID_FORMAT),
+            run_id=clock.strftime(RUN_ID_FORMAT),
+        )
+
+    @classmethod
+    def from_run_id(
+        cls,
+        agent_name: str,
+        run_id: str,
+        runs_root: Path = Path("runs"),
+    ) -> "RunArtifactLayout":
+        return cls(
+            runs_root=runs_root,
+            agent_name=agent_name,
+            run_id=run_id,
         )
 
     @property
@@ -107,4 +156,9 @@ class RunArtifactLayout:
         return self.dom_snapshot_dir(case_id) / filename
 
 
-__all__ = ["RunArtifactLayout"]
+__all__ = [
+    "RUN_ID_FORMAT",
+    "InvalidRunId",
+    "RunArtifactLayout",
+    "TraceArtifactPaths",
+]

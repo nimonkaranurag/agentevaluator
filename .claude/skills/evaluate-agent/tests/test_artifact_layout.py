@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from evaluate_agent.driver import RunArtifactLayout
+from evaluate_agent.artifact_layout import (
+    RUN_ID_FORMAT,
+    InvalidRunId,
+    RunArtifactLayout,
+)
 
 
 class TestFactory:
@@ -236,12 +240,127 @@ class TestAutoDOMSnapshotPaths:
         assert explicit_path.name.startswith("step-")
 
 
+class TestFromRunId:
+    def test_constructs_layout_with_supplied_run_id(
+        self,
+    ) -> None:
+        layout = RunArtifactLayout.from_run_id(
+            agent_name="x",
+            run_id="20260425T173000Z",
+            runs_root=Path("/tmp/r"),
+        )
+        assert layout.run_id == "20260425T173000Z"
+        assert layout.agent_name == "x"
+        assert layout.runs_root == Path("/tmp/r")
+
+    def test_run_dir_uses_supplied_run_id(self) -> None:
+        layout = RunArtifactLayout.from_run_id(
+            agent_name="x",
+            run_id="20260425T173000Z",
+            runs_root=Path("/tmp/r"),
+        )
+        assert layout.run_dir == Path(
+            "/tmp/r/x/20260425T173000Z"
+        )
+
+    def test_defaults_runs_root_to_relative_runs_dir(
+        self,
+    ) -> None:
+        layout = RunArtifactLayout.from_run_id(
+            agent_name="x",
+            run_id="20260101T000000Z",
+        )
+        assert layout.runs_root == Path("runs")
+
+    def test_for_agent_and_from_run_id_agree_on_paths(
+        self,
+    ) -> None:
+        fixed = datetime(
+            2026, 4, 25, 17, 30, 0, tzinfo=timezone.utc
+        )
+        canonical = RunArtifactLayout.for_agent(
+            agent_name="x",
+            now=fixed,
+            runs_root=Path("/tmp/r"),
+        )
+        replay = RunArtifactLayout.from_run_id(
+            agent_name="x",
+            run_id=canonical.run_id,
+            runs_root=Path("/tmp/r"),
+        )
+        assert replay == canonical
+        assert replay.case_dir("c") == canonical.case_dir(
+            "c"
+        )
+
+
+class TestRunIdValidation:
+    @pytest.mark.parametrize(
+        "bad_run_id",
+        [
+            "",
+            "20260425",
+            "20260425T1730",
+            "2026-04-25T17:30:00Z",
+            "20260425T173000",
+            "abc",
+            "20269999T999999Z",
+            "20260230T000000Z",
+        ],
+    )
+    def test_post_init_rejects_malformed_run_id(
+        self, bad_run_id: str
+    ) -> None:
+        with pytest.raises(InvalidRunId) as exc_info:
+            RunArtifactLayout(
+                runs_root=Path("/tmp"),
+                agent_name="a",
+                run_id=bad_run_id,
+            )
+        assert exc_info.value.value == bad_run_id
+
+    def test_from_run_id_rejects_malformed_run_id(
+        self,
+    ) -> None:
+        with pytest.raises(InvalidRunId):
+            RunArtifactLayout.from_run_id(
+                agent_name="a",
+                run_id="not-a-run-id",
+            )
+
+    def test_invalid_run_id_message_names_format(
+        self,
+    ) -> None:
+        with pytest.raises(InvalidRunId) as exc_info:
+            RunArtifactLayout(
+                runs_root=Path("/tmp"),
+                agent_name="a",
+                run_id="bogus",
+            )
+        text = str(exc_info.value)
+        assert "YYYYMMDDTHHMMSSZ" in text
+        assert "20260425T173000Z" in text
+        assert "To proceed:" in text
+
+    def test_run_id_format_constant_is_iso_compact_utc(
+        self,
+    ) -> None:
+        assert RUN_ID_FORMAT == "%Y%m%dT%H%M%SZ"
+        sample = datetime(
+            2026, 4, 25, 17, 30, 0, tzinfo=timezone.utc
+        )
+        assert (
+            sample.strftime(RUN_ID_FORMAT)
+            == "20260425T173000Z"
+        )
+
+
 class TestImmutability:
     def test_layout_is_frozen(self) -> None:
         layout = RunArtifactLayout(
             runs_root=Path("/tmp"),
             agent_name="a",
-            run_id="b",
+            run_id="20260424T000000Z",
         )
         with pytest.raises(FrozenInstanceError):
             layout.runs_root = Path("/elsewhere")

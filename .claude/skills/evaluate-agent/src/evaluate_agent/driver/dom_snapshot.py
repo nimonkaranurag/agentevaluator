@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .artifact_layout import RunArtifactLayout
+from ..artifact_layout import RunArtifactLayout
 
 
 class DOMSnapshotable(Protocol):

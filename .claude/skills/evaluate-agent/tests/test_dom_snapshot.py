@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from evaluate_agent.driver.artifact_layout import (
+from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
 from evaluate_agent.driver.dom_snapshot import (

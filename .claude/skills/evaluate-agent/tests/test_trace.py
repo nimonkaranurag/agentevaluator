@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pytest
-from evaluate_agent.driver.trace import (
+from evaluate_agent.artifact_layout import (
     TraceArtifactPaths,
+)
+from evaluate_agent.driver.trace import (
     TraceCollector,
     TraceCollectorAlreadyAttached,
     collect_trace,
