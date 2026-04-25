@@ -92,6 +92,22 @@ Resolvable assertion: `final_response_contains` matches the expected substring a
 
 Exit 0 once scoring completes, regardless of pass / fail / inconclusive counts. Exit 1 only on manifest load errors, an unknown `--case` id, or a missing / non-directory `--case-dir`.
 
+### Aggregate every captured case in a swarm plan into one agent score
+
+```
+uv run .claude/skills/evaluate-agent/scripts/score_agent.py <path-to-plan.json>
+```
+
+Reads a swarm plan produced by `plan_swarm.py`, loads the manifest the plan references, scores every entry's case via `score_case`, and emits a JSON `AgentScore` record to stdout. The record carries every per-case `CaseScore` plus a deterministic `rollup` that aggregates outcomes along three dimensions:
+
+- `rollup.by_assertion_kind` — one row per assertion kind that had at least one outcome, listed in the schema order `final_response_contains`, `must_call`, `must_not_call`, `must_route_to`, `max_steps`. Each row has `total / passed / failed / inconclusive` counts across every case.
+- `rollup.by_target` — one row per `(assertion_kind, target)` pair for the per-target kinds (`must_call`, `must_not_call`, `must_route_to`). Sorted by assertion kind in schema order, then by target lexicographically. Each row has the same four counts; targets that appear in multiple cases sum across them.
+- `rollup.cases` — case-granularity counts: `total`, `fully_passed` (cases whose every assertion outcome was `passed`), `with_any_failure` (cases with at least one failed outcome), `with_any_inconclusive` (cases with at least one inconclusive outcome — overlaps with `with_any_failure` when a case has both), `with_no_assertions` (cases that declared zero assertions and therefore have zero outcomes — mutually exclusive with `fully_passed`).
+
+`rollup` also carries top-level `total_assertions / passed / failed / inconclusive` counts that partition every outcome across every case. The composition is deterministic: the same set of `CaseScore` records always produces the same `AgentScore` byte-for-byte.
+
+Exit 0 once aggregation completes, regardless of pass / fail / inconclusive counts. Exit 1 on a missing or malformed plan file, a manifest load error, a plan that references case ids the manifest does not declare, or any case directory in the plan that does not exist on disk.
+
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
@@ -107,12 +123,18 @@ Follow these steps in order. Do not skip or reorder them.
     - **The whole agent (every declared case).** Invoke `plan_swarm.py` to expand the manifest into a JSON fan-out plan. Parse the plan's `entries` array. Dispatch one Agent sub-task per entry IN A SINGLE MESSAGE so every case runs in parallel under its own isolated browser context. Each sub-task's prompt must instruct the sub-agent to invoke the entry's `driver_invocation.script` with the entry's `driver_invocation.arguments` exactly as supplied — do NOT modify the argv. Every entry's argv pins the same `--run-id`, so all sibling sub-agents write into one shared `runs/<agent>/<run_id>/` directory. After all sub-tasks complete, compose results from the captured artifacts under each entry's `case_dir`; never re-run a case at the orchestrator level.
     - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
-5. **Score every driven case.** For each `case_dir` produced by step 4, invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>`. Parse the JSON `CaseScore` record. The orchestrator narrates results to the user from these records, NEVER from intuition or visual scan of the screenshots. For each per-assertion outcome:
+5. **Score every driven case.** Branch on which driver invocation step 4 ran:
+    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and parse the JSON `CaseScore` record. Skip step 6 — there is no swarm plan to aggregate.
+    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and parse the JSON `AgentScore` record. The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately.
+
+6. **Narrate results from the score records, NEVER from intuition or visual scan of the screenshots.** For each per-assertion outcome inside a `CaseScore` (or every `case_score.outcomes` inside an `AgentScore`):
     - `passed` — narrate the success and cite `evidence.artifact_path`. The path resolves to a real captured file the user can open.
     - `failed` — narrate the discrepancy with `expected` vs `observed` and cite `evidence.artifact_path`.
     - `inconclusive` — relay `reason.recovery` verbatim. Do NOT guess, infer, or pattern-match the assertion against screenshots; the inconclusive outcome means the structural evidence required for evaluation is absent. Suggest the manifest changes named in the recovery procedure (declare the named observability source, re-run with `--submit`, etc.).
 
-6. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+   When an `AgentScore` is available, lead the narrative with the cross-case rollup before per-case detail: the `rollup.total_assertions / passed / failed / inconclusive` counts orient the user; `rollup.by_assertion_kind` shows where the agent is strong vs weak per assertion kind; `rollup.by_target` shows which tools or sub-agents were exercised and how they fared; `rollup.cases` shows how many cases passed cleanly vs need attention. Cite specific cases by `case_id` and `case_dir` when drilling into failures or inconclusives.
+
+7. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
 ## Design principles
 
