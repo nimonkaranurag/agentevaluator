@@ -109,6 +109,20 @@ Reads a swarm plan produced by `plan_swarm.py`, loads the manifest the plan refe
 
 Exit 0 once aggregation completes, regardless of pass / fail / inconclusive counts. Exit 1 on a missing or malformed plan file, a manifest load error, a plan that references case ids the manifest does not declare, or any case directory in the plan that does not exist on disk.
 
+### Render a score record as a Markdown report
+
+```
+uv run .claude/skills/evaluate-agent/scripts/render_report.py <path-to-score.json>
+```
+
+Reads a JSON score file produced by `score_case.py` (`CaseScore`) or `score_agent.py` (`AgentScore`), verifies that every cited artifact path inside the record resolves to a real file or directory on disk, and emits a Markdown narrative to stdout. The script autodetects the record type by the presence of the top-level `agent_name` field. Every cited artifact path appears verbatim in the rendered report so a reader can open the file and inspect the underlying evidence; the structural integrity check guarantees no rendered citation points at a missing artifact.
+
+For an `AgentScore`, the report is structured as: an `H1` header naming the agent, run id, manifest path, and runs root; a `## Summary` row with assertion totals; a `## By assertion kind` table listing each kind in schema order with its passed/failed/inconclusive counts; a `## By target` table for the per-target kinds (`must_call`, `must_not_call`, `must_route_to`); a `## By case` row with case-granularity counts; and a `## Per-case detail` section that renders each case as `H3` with its assertion outcomes. Sections that have no rows (e.g. `## By target` when no per-target assertions exist) are omitted.
+
+For a `CaseScore`, the report is structured as: an `H1` header naming the case with a one-line summary of pass/fail/inconclusive counts; the case directory; and a list of every assertion outcome. Each `passed` outcome cites its `evidence.artifact_path`; each `failed` outcome lists `expected` and `observed` plus the evidence path; each `inconclusive` outcome names the reason kind and relays the recovery procedure verbatim.
+
+Exit 0 once rendering completes. Exit 1 on a missing or malformed score file, a record that does not validate against either the `CaseScore` or `AgentScore` schema, or any unresolved citation reported by the structural integrity check (with a numbered recovery procedure on stderr naming the score command and the run directory the citations point at).
+
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
@@ -125,17 +139,14 @@ Follow these steps in order. Do not skip or reorder them.
     - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
 5. **Score every driven case.** Branch on which driver invocation step 4 ran:
-    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and parse the JSON `CaseScore` record. Skip step 6 — there is no swarm plan to aggregate.
-    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and parse the JSON `AgentScore` record. The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately.
+    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 6.
+    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 6.
 
-6. **Narrate results from the score records, NEVER from intuition or visual scan of the screenshots.** For each per-assertion outcome inside a `CaseScore` (or every `case_score.outcomes` inside an `AgentScore`):
-    - `passed` — narrate the success and cite `evidence.artifact_path`. The path resolves to a real captured file the user can open.
-    - `failed` — narrate the discrepancy with `expected` vs `observed` and cite `evidence.artifact_path`.
-    - `inconclusive` — relay `reason.recovery` verbatim. Do NOT guess, infer, or pattern-match the assertion against screenshots; the inconclusive outcome means the structural evidence required for evaluation is absent. Suggest the manifest changes named in the recovery procedure (declare the named observability source, re-run with `--submit`, etc.).
+6. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 5. The script autodetects the record type (`CaseScore` vs `AgentScore`), verifies that every cited artifact path resolves on disk, and emits a structured Markdown narrative to stdout. Relay the rendered Markdown to the user verbatim — every artifact citation is a real path the user can open, and the recovery procedure for every inconclusive outcome is inlined in the rendered report. If the script raises `UnresolvedCitationError`, relay the stderr recovery procedure to the user verbatim and STOP.
 
-   When an `AgentScore` is available, lead the narrative with the cross-case rollup before per-case detail: the `rollup.total_assertions / passed / failed / inconclusive` counts orient the user; `rollup.by_assertion_kind` shows where the agent is strong vs weak per assertion kind; `rollup.by_target` shows which tools or sub-agents were exercised and how they fared; `rollup.cases` shows how many cases passed cleanly vs need attention. Cite specific cases by `case_id` and `case_dir` when drilling into failures or inconclusives.
+7. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
 
-7. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+8. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
 ## Design principles
 
