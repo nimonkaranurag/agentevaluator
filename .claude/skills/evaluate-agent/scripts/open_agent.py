@@ -158,6 +158,7 @@ async def _drive(
     )
     trace_paths = layout.trace_paths(case.id)
     auto_dom_dir = layout.dom_snapshot_dir(case.id)
+    case_dir = layout.case_dir(case.id)
 
     try:
         async with open_session(
@@ -228,6 +229,11 @@ async def _drive(
         if auto_dom_dir.is_dir()
         else []
     )
+    auto_screenshots = (
+        sorted(case_dir.glob("auto-*.png"))
+        if case_dir.is_dir()
+        else []
+    )
     lines.extend(
         [
             f"  trace_dir:                {trace_paths.trace_dir}",
@@ -244,6 +250,13 @@ async def _drive(
     ):
         lines.append(
             f"  auto_dom_snapshot[{index}]:     {path}"
+        )
+    lines.append(
+        f"  auto_screenshots:         {len(auto_screenshots)} captured"
+    )
+    for index, path in enumerate(auto_screenshots, start=1):
+        lines.append(
+            f"  auto_screenshot[{index}]:       {path}"
         )
     print("\n".join(lines))
     return 0
