@@ -240,6 +240,100 @@ class TestAutoDOMSnapshotPaths:
         assert explicit_path.name.startswith("step-")
 
 
+class TestAutoScreenshotPaths:
+    def _layout(self) -> RunArtifactLayout:
+        return RunArtifactLayout(
+            runs_root=Path("/tmp/runs"),
+            agent_name="my-agent",
+            run_id="20260424T000000Z",
+        )
+
+    def test_auto_screenshot_path_sits_in_case_dir(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_screenshot_path(
+            "case_one", 1, "nav"
+        )
+        assert path.parent == layout.case_dir("case_one")
+
+    def test_auto_screenshot_path_uses_auto_prefix(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_screenshot_path(
+            "case_one", 1, "nav"
+        )
+        assert path.name == "auto-001-nav.png"
+
+    def test_auto_screenshot_path_zero_pads_step_number(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_screenshot_path(
+            "case_one", 7, "nav"
+        )
+        assert path.name == "auto-007-nav.png"
+
+    def test_auto_screenshot_path_supports_large_step_numbers(
+        self,
+    ) -> None:
+        layout = self._layout()
+        path = layout.auto_screenshot_path(
+            "case_one", 2048, "nav"
+        )
+        assert path.name == "auto-2048-nav.png"
+
+    def test_auto_screenshot_and_explicit_screenshot_are_distinct(
+        self,
+    ) -> None:
+        layout = self._layout()
+        auto_path = layout.auto_screenshot_path(
+            "c", 1, "nav"
+        )
+        explicit_path = layout.screenshot_path(
+            "c", 1, "nav"
+        )
+        assert auto_path != explicit_path
+        assert auto_path.name.startswith("auto-")
+        assert explicit_path.name.startswith("step-")
+        assert auto_path.parent == explicit_path.parent
+
+    def test_auto_screenshot_and_auto_dom_share_label_but_differ_in_dir_and_extension(
+        self,
+    ) -> None:
+        layout = self._layout()
+        auto_screenshot = layout.auto_screenshot_path(
+            "c", 1, "nav"
+        )
+        auto_dom = layout.auto_dom_snapshot_path(
+            "c", 1, "nav"
+        )
+        assert auto_screenshot.stem == auto_dom.stem
+        assert auto_screenshot.suffix == ".png"
+        assert auto_dom.suffix == ".html"
+        assert auto_screenshot.parent != auto_dom.parent
+        assert auto_screenshot.parent == layout.case_dir(
+            "c"
+        )
+        assert auto_dom.parent == layout.dom_snapshot_dir(
+            "c"
+        )
+
+    def test_different_cases_get_separate_screenshot_paths(
+        self,
+    ) -> None:
+        layout = self._layout()
+        first = layout.auto_screenshot_path(
+            "case_one", 1, "nav"
+        )
+        second = layout.auto_screenshot_path(
+            "case_two", 1, "nav"
+        )
+        assert first != second
+        assert first.parent != second.parent
+
+
 class TestFromRunId:
     def test_constructs_layout_with_supplied_run_id(
         self,

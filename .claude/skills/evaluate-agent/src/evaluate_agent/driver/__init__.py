@@ -11,6 +11,11 @@ from .auto_dom_snapshot import (
     AutoDOMSnapshotCollectorAlreadyAttached,
     NavigatedFrame,
 )
+from .auto_screenshot import (
+    AutoScreenshotablePage,
+    AutoScreenshotCollector,
+    AutoScreenshotCollectorAlreadyAttached,
+)
 from .capture import (
     Capture,
     InvalidCaptureLabel,
@@ -36,6 +41,9 @@ from .trace import (
 __all__ = [
     "AutoDOMSnapshotCollector",
     "AutoDOMSnapshotCollectorAlreadyAttached",
+    "AutoScreenshotCollector",
+    "AutoScreenshotCollectorAlreadyAttached",
+    "AutoScreenshotablePage",
     "Capture",
     "DOMSnapshotable",
     "DOMSnapshotter",

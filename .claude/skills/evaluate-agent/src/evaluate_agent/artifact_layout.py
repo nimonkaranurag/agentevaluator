@@ -18,7 +18,7 @@ _REQUESTS_FILENAME = "requests.jsonl"
 _RESPONSES_FILENAME = "responses.jsonl"
 _CONSOLE_FILENAME = "console.jsonl"
 _PAGE_ERRORS_FILENAME = "page_errors.jsonl"
-_AUTO_DOM_PREFIX = "auto"
+_AUTO_PREFIX = "auto"
 
 
 class InvalidRunId(ValueError):
@@ -110,6 +110,18 @@ class RunArtifactLayout:
         filename = f"step-{step_number:03d}-{label}.png"
         return self.case_dir(case_id) / filename
 
+    def auto_screenshot_path(
+        self,
+        case_id: str,
+        step_number: int,
+        event_suffix: str,
+    ) -> Path:
+        filename = (
+            f"{_AUTO_PREFIX}-{step_number:03d}-"
+            f"{event_suffix}.png"
+        )
+        return self.case_dir(case_id) / filename
+
     def trace_paths(
         self, case_id: str
     ) -> TraceArtifactPaths:
@@ -150,7 +162,7 @@ class RunArtifactLayout:
         event_suffix: str,
     ) -> Path:
         filename = (
-            f"{_AUTO_DOM_PREFIX}-{step_number:03d}-"
+            f"{_AUTO_PREFIX}-{step_number:03d}-"
             f"{event_suffix}.{DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
