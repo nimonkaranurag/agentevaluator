@@ -16,6 +16,7 @@ from playwright.async_api import (
 
 from .artifact_layout import RunArtifactLayout
 from .auth import context_kwargs_for
+from .auto_dom_snapshot import AutoDOMSnapshotCollector
 from .trace import (
     TraceArtifactPaths,
     collect_trace,
@@ -39,6 +40,9 @@ async def open_session(
     context_kwargs = context_kwargs_for(access)
     trace_paths = layout.trace_paths(case_id)
     trace_paths.ensure_dir()
+    auto_dom = AutoDOMSnapshotCollector(
+        layout=layout, case_id=case_id
+    )
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=headless
@@ -55,6 +59,7 @@ async def open_session(
                     trace_paths
                 ) as collector:
                     collector.attach(page)
+                    auto_dom.attach(page)
                     try:
                         await page.goto(str(access.url))
                         yield Session(
@@ -62,6 +67,8 @@ async def open_session(
                             trace_paths=trace_paths,
                         )
                     finally:
+                        await auto_dom.flush()
+                        auto_dom.detach(page)
                         collector.detach(page)
             finally:
                 await context.close()

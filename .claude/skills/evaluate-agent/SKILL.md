@@ -64,8 +64,9 @@ Every invocation also writes baseline trace artifacts alongside the screenshots 
 - `console.jsonl` — streaming record of every page `console` message (type, text, source location, UTC timestamp).
 - `page_errors.jsonl` — streaming record of every uncaught `pageerror` (message, UTC timestamp).
 - `dom/step-<NNN>-<label>.html` — serialized rendered DOM (UTF-8 HTML) captured at each labeled screenshot point. Step number and label mirror the paired `.png` so a reader can cross-reference visual evidence with the programmatically inspectable DOM.
+- `dom/auto-<NNN>-nav.html` — serialized rendered DOM captured automatically on every main-frame navigation (`framenavigated` event). Covers redirects, server-side page transitions, and client-side SPA route changes that the labeled `step-*.html` captures would miss. The `auto-` and `step-` prefixes share the same `dom/` directory without colliding; the step counters are independent.
 
-The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly.
+The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly, including one row per automatic DOM snapshot recorded under `dom/auto-*.html`.
 
 ## When the user asks to evaluate an agent — CRITICAL
 
