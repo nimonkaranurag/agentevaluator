@@ -51,10 +51,10 @@ Parses `agent.yaml` and checks it against the schema. Prints a formal summary on
 
 ```
 uv run playwright install chromium                              # one-time, per machine
-uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--submit] [--runs-root <dir>] [--headed]
+uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--submit] [--runs-root <dir>] [--run-id <YYYYMMDDTHHMMSSZ>] [--headed]
 ```
 
-Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<utc_timestamp>/<case_id>/step-001-landing.png` paired with a full-DOM snapshot at `<case_dir>/trace/dom/step-001-landing.html`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png` paired with `<case_dir>/trace/dom/step-002-after_submit.html`. `--case` must match one of the declared `cases[].id` values. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
+Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<run_id>/<case_id>/step-001-landing.png` paired with a full-DOM snapshot at `<case_dir>/trace/dom/step-001-landing.html`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png` paired with `<case_dir>/trace/dom/step-002-after_submit.html`. `--case` must match one of the declared `cases[].id` values. `--run-id` reuses a pre-committed UTC timestamp (format `YYYYMMDDTHHMMSSZ`) so multiple invocations write into the same `runs/<agent>/<run_id>/` directory; when omitted, a fresh timestamp is captured at invocation time. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
 
 Every invocation also writes baseline trace artifacts alongside the screenshots under `<case_dir>/trace/`:
 
@@ -68,6 +68,14 @@ Every invocation also writes baseline trace artifacts alongside the screenshots 
 
 The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly, including one row per automatic DOM snapshot recorded under `dom/auto-*.html`.
 
+### Plan a swarm fan-out for every declared case
+
+```
+uv run .claude/skills/evaluate-agent/scripts/plan_swarm.py <path-to-agent.yaml> [--runs-root <dir>]
+```
+
+Expands the validated manifest into a deterministic JSON fan-out plan emitted to stdout. The plan carries one shared `run_id` and one entry per case; each entry contains the absolute `case_dir` and a complete `driver_invocation` (absolute script path plus argv) sufficient to drive that case in isolation. Every entry pins the same `--run-id`, so all sibling sub-agents write artifacts into the same `runs/<agent_name>/<run_id>/` directory. Entries appear in the order the cases were declared in the manifest. Exit 0 on success, 1 on any manifest load or validation error.
+
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
@@ -78,7 +86,10 @@ Follow these steps in order. Do not skip or reorder them.
 
 3. **Summarise what was validated.** Report back to the user: agent name, number of cases, declared tool count, declared sub-agent count. This confirms which agent you loaded.
 
-4. **Open and drive the case.** Invoke `open_agent.py` with the case id. Without `--submit`, the invocation captures the landing view only — use this when the user asks for a screenshot, to "see" the agent, or to verify access works. With `--submit`, the invocation additionally types `case.input` into the agent's primary input field and captures the post-submit screenshot. If the user did not specify a case id, list the declared ids and ask. If the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
+4. **Drive the manifest.** Branch on the user's request:
+    - **A specific case named by the user, OR a manifest with one declared case.** Invoke `open_agent.py` directly with `--submit` and that case id. Without `--submit`, the invocation captures the landing view only — use this only when the user asks for a screenshot, to "see" the agent, or to verify access works. If the user did not specify a case id and the manifest declares more than one, list the declared ids and ask before proceeding.
+    - **The whole agent (every declared case).** Invoke `plan_swarm.py` to expand the manifest into a JSON fan-out plan. Parse the plan's `entries` array. Dispatch one Agent sub-task per entry IN A SINGLE MESSAGE so every case runs in parallel under its own isolated browser context. Each sub-task's prompt must instruct the sub-agent to invoke the entry's `driver_invocation.script` with the entry's `driver_invocation.arguments` exactly as supplied — do NOT modify the argv. Every entry's argv pins the same `--run-id`, so all sibling sub-agents write into one shared `runs/<agent>/<run_id>/` directory. After all sub-tasks complete, compose results from the captured artifacts under each entry's `case_dir`; never re-run a case at the orchestrator level.
+    - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
 5. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 

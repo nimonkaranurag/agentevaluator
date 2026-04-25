@@ -8,7 +8,6 @@ import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import (
     Any,
     AsyncIterator,
@@ -18,18 +17,7 @@ from typing import (
     runtime_checkable,
 )
 
-
-@dataclass(frozen=True)
-class TraceArtifactPaths:
-    trace_dir: Path
-    har_path: Path
-    requests_path: Path
-    responses_path: Path
-    console_path: Path
-    page_errors_path: Path
-
-    def ensure_dir(self) -> None:
-        self.trace_dir.mkdir(parents=True, exist_ok=True)
+from ..artifact_layout import TraceArtifactPaths
 
 
 @runtime_checkable
@@ -257,7 +245,6 @@ async def collect_trace(
 
 __all__ = [
     "PageEventEmitter",
-    "TraceArtifactPaths",
     "TraceCollector",
     "TraceCollectorAlreadyAttached",
     "collect_trace",

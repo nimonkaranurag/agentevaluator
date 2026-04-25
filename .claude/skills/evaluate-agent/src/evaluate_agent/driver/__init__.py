@@ -2,7 +2,6 @@
 Playwright driver for live-agent evaluation.
 """
 
-from .artifact_layout import RunArtifactLayout
 from .auth import (
     MissingAuthEnvVar,
     context_kwargs_for,
@@ -29,7 +28,6 @@ from .interact import (
 from .session import Session, open_session
 from .trace import (
     PageEventEmitter,
-    TraceArtifactPaths,
     TraceCollector,
     TraceCollectorAlreadyAttached,
     collect_trace,
@@ -47,10 +45,8 @@ __all__ = [
     "MissingAuthEnvVar",
     "NavigatedFrame",
     "PageEventEmitter",
-    "RunArtifactLayout",
     "Screenshotable",
     "Session",
-    "TraceArtifactPaths",
     "TraceCollector",
     "TraceCollectorAlreadyAttached",
     "collect_trace",

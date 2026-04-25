@@ -29,12 +29,15 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _SRC_DIR = _SCRIPT_DIR.parent / "src"
 sys.path.insert(0, str(_SRC_DIR))
 
+from evaluate_agent.artifact_layout import (  # noqa: E402
+    InvalidRunId,
+    RunArtifactLayout,
+)
 from evaluate_agent.driver import (  # noqa: E402
     Capture,
     DOMSnapshotter,
     InputElementNotFound,
     MissingAuthEnvVar,
-    RunArtifactLayout,
     open_session,
     submit_case_input,
 )
@@ -82,6 +85,20 @@ def _parse_args(
         help="Directory where run artifacts are written (default: ./runs).",
     )
     parser.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "Reuse a pre-committed run id "
+            "(format YYYYMMDDTHHMMSSZ, UTC) so multiple "
+            "invocations write artifacts under the same "
+            "<runs-root>/<agent>/<run-id>/ directory. "
+            "Required when this script is dispatched as "
+            "part of a swarm so every sub-agent shares "
+            "one run directory. Default: a fresh UTC "
+            "timestamp captured at invocation time."
+        ),
+    )
+    parser.add_argument(
         "--headed",
         action="store_true",
         help="Show the browser window (default: headless).",
@@ -115,10 +132,22 @@ async def _drive(
         )
         return 1
 
-    layout = RunArtifactLayout.for_agent(
-        agent_name=manifest.name,
-        runs_root=args.runs_root,
-    )
+    try:
+        layout = (
+            RunArtifactLayout.from_run_id(
+                agent_name=manifest.name,
+                run_id=args.run_id,
+                runs_root=args.runs_root,
+            )
+            if args.run_id is not None
+            else RunArtifactLayout.for_agent(
+                agent_name=manifest.name,
+                runs_root=args.runs_root,
+            )
+        )
+    except InvalidRunId as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     capture = Capture(layout=layout, case_id=case.id)
     dom_snapshotter = DOMSnapshotter(
         layout=layout, case_id=case.id

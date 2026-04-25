@@ -13,7 +13,7 @@ from typing import (
     Protocol,
 )
 
-from .artifact_layout import RunArtifactLayout
+from ..artifact_layout import RunArtifactLayout
 from .trace import PageEventEmitter
 
 _NAVIGATED_EVENT = "framenavigated"
