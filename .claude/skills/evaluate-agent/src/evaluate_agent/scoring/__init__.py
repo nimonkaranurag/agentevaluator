@@ -1,7 +1,17 @@
 """
-Score a captured case against its declared assertions.
+Score captured cases against their declared assertions.
 """
 
+from .agent_score import (
+    ASSERTION_KIND_SCHEMA_ORDER,
+    AgentRollup,
+    AgentScore,
+    AssertionKindRollup,
+    AssertionTargetRollup,
+    CaseOutcomeRollup,
+    TargetedAssertionKind,
+    score_agent,
+)
 from .case_score import CaseScore, score_case
 from .dom_snapshot_resolver import (
     post_submit_dom_snapshot_dir,
@@ -30,16 +40,23 @@ from .outcomes import (
 )
 
 __all__ = [
+    "ASSERTION_KIND_SCHEMA_ORDER",
+    "AgentRollup",
+    "AgentScore",
     "AssertionEvidence",
     "AssertionFailed",
     "AssertionInconclusive",
     "AssertionKind",
+    "AssertionKindRollup",
     "AssertionOutcome",
     "AssertionPassed",
+    "AssertionTargetRollup",
+    "CaseOutcomeRollup",
     "CaseScore",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilitySourceMissing",
+    "TargetedAssertionKind",
     "evaluate_final_response_contains",
     "evaluate_max_steps",
     "evaluate_must_call",
@@ -48,5 +65,6 @@ __all__ = [
     "extract_visible_text",
     "post_submit_dom_snapshot_dir",
     "resolve_post_submit_dom_snapshot",
+    "score_agent",
     "score_case",
 ]
