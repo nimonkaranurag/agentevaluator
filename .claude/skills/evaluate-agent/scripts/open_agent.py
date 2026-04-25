@@ -33,6 +33,10 @@ from evaluate_agent.artifact_layout import (  # noqa: E402
     InvalidRunId,
     RunArtifactLayout,
 )
+from evaluate_agent.capture_labels import (  # noqa: E402
+    LANDING_LABEL,
+    POST_SUBMIT_LABEL,
+)
 from evaluate_agent.driver import (  # noqa: E402
     Capture,
     DOMSnapshotter,
@@ -163,10 +167,10 @@ async def _drive(
             headless=not args.headed,
         ) as session:
             landing = await capture.screenshot(
-                session.page, "landing"
+                session.page, LANDING_LABEL
             )
             landing_dom = await dom_snapshotter.snapshot(
-                session.page, "landing"
+                session.page, LANDING_LABEL
             )
             submission: dict[str, object] | None = None
             if args.submit:
@@ -177,11 +181,11 @@ async def _drive(
                     response_wait_ms=manifest.interaction.response_wait_ms,
                 )
                 after_submit = await capture.screenshot(
-                    session.page, "after_submit"
+                    session.page, POST_SUBMIT_LABEL
                 )
                 after_submit_dom = (
                     await dom_snapshotter.snapshot(
-                        session.page, "after_submit"
+                        session.page, POST_SUBMIT_LABEL
                     )
                 )
                 submission = {

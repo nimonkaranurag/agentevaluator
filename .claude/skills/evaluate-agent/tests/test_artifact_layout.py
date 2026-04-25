@@ -364,3 +364,58 @@ class TestImmutability:
         )
         with pytest.raises(FrozenInstanceError):
             layout.runs_root = Path("/elsewhere")
+
+
+class TestPublicConstants:
+    def test_trace_subdir(self):
+        from evaluate_agent.artifact_layout import (
+            TRACE_SUBDIR,
+        )
+
+        assert TRACE_SUBDIR == "trace"
+
+    def test_dom_snapshots_subdir(self):
+        from evaluate_agent.artifact_layout import (
+            DOM_SNAPSHOTS_SUBDIR,
+        )
+
+        assert DOM_SNAPSHOTS_SUBDIR == "dom"
+
+    def test_explicit_dom_prefix(self):
+        from evaluate_agent.artifact_layout import (
+            EXPLICIT_DOM_PREFIX,
+        )
+
+        assert EXPLICIT_DOM_PREFIX == "step"
+
+    def test_dom_snapshot_extension(self):
+        from evaluate_agent.artifact_layout import (
+            DOM_SNAPSHOT_EXT,
+        )
+
+        assert DOM_SNAPSHOT_EXT == "html"
+
+    def test_constants_match_path_construction(
+        self,
+    ) -> None:
+        from evaluate_agent.artifact_layout import (
+            DOM_SNAPSHOT_EXT,
+            DOM_SNAPSHOTS_SUBDIR,
+            EXPLICIT_DOM_PREFIX,
+            TRACE_SUBDIR,
+        )
+
+        layout = RunArtifactLayout(
+            runs_root=Path("/tmp"),
+            agent_name="a",
+            run_id="20260424T000000Z",
+        )
+        path = layout.dom_snapshot_path(
+            "case_x", 1, "after_submit"
+        )
+        assert path.parent.name == DOM_SNAPSHOTS_SUBDIR
+        assert path.parent.parent.name == TRACE_SUBDIR
+        assert path.name.startswith(
+            f"{EXPLICIT_DOM_PREFIX}-"
+        )
+        assert path.suffix == f".{DOM_SNAPSHOT_EXT}"
