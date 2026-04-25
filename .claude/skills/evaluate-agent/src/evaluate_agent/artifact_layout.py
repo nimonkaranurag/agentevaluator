@@ -9,15 +9,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 RUN_ID_FORMAT = "%Y%m%dT%H%M%SZ"
-_TRACE_SUBDIR = "trace"
+TRACE_SUBDIR = "trace"
+DOM_SNAPSHOTS_SUBDIR = "dom"
+DOM_SNAPSHOT_EXT = "html"
+EXPLICIT_DOM_PREFIX = "step"
 _HAR_FILENAME = "network.har"
 _REQUESTS_FILENAME = "requests.jsonl"
 _RESPONSES_FILENAME = "responses.jsonl"
 _CONSOLE_FILENAME = "console.jsonl"
 _PAGE_ERRORS_FILENAME = "page_errors.jsonl"
-_DOM_SNAPSHOTS_SUBDIR = "dom"
-_DOM_SNAPSHOT_EXT = "html"
-_EXPLICIT_DOM_PREFIX = "step"
 _AUTO_DOM_PREFIX = "auto"
 
 
@@ -113,7 +113,7 @@ class RunArtifactLayout:
     def trace_paths(
         self, case_id: str
     ) -> TraceArtifactPaths:
-        trace_dir = self.case_dir(case_id) / _TRACE_SUBDIR
+        trace_dir = self.case_dir(case_id) / TRACE_SUBDIR
         return TraceArtifactPaths(
             trace_dir=trace_dir,
             har_path=trace_dir / _HAR_FILENAME,
@@ -127,8 +127,8 @@ class RunArtifactLayout:
     def dom_snapshot_dir(self, case_id: str) -> Path:
         return (
             self.case_dir(case_id)
-            / _TRACE_SUBDIR
-            / _DOM_SNAPSHOTS_SUBDIR
+            / TRACE_SUBDIR
+            / DOM_SNAPSHOTS_SUBDIR
         )
 
     def dom_snapshot_path(
@@ -138,8 +138,8 @@ class RunArtifactLayout:
         label: str,
     ) -> Path:
         filename = (
-            f"{_EXPLICIT_DOM_PREFIX}-{step_number:03d}-"
-            f"{label}.{_DOM_SNAPSHOT_EXT}"
+            f"{EXPLICIT_DOM_PREFIX}-{step_number:03d}-"
+            f"{label}.{DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
 
@@ -151,13 +151,17 @@ class RunArtifactLayout:
     ) -> Path:
         filename = (
             f"{_AUTO_DOM_PREFIX}-{step_number:03d}-"
-            f"{event_suffix}.{_DOM_SNAPSHOT_EXT}"
+            f"{event_suffix}.{DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
 
 
 __all__ = [
+    "DOM_SNAPSHOT_EXT",
+    "DOM_SNAPSHOTS_SUBDIR",
+    "EXPLICIT_DOM_PREFIX",
     "RUN_ID_FORMAT",
+    "TRACE_SUBDIR",
     "InvalidRunId",
     "RunArtifactLayout",
     "TraceArtifactPaths",

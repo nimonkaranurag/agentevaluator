@@ -76,6 +76,22 @@ uv run .claude/skills/evaluate-agent/scripts/plan_swarm.py <path-to-agent.yaml> 
 
 Expands the validated manifest into a deterministic JSON fan-out plan emitted to stdout. The plan carries one shared `run_id` and one entry per case; each entry contains the absolute `case_dir` and a complete `driver_invocation` (absolute script path plus argv) sufficient to drive that case in isolation. Every entry pins the same `--run-id`, so all sibling sub-agents write artifacts into the same `runs/<agent_name>/<run_id>/` directory. Entries appear in the order the cases were declared in the manifest. Exit 0 on success, 1 on any manifest load or validation error.
 
+### Score a captured case against its declared assertions
+
+```
+uv run .claude/skills/evaluate-agent/scripts/score_case.py <path-to-agent.yaml> --case <case_id> --case-dir <path-to-case-dir>
+```
+
+Reads the case from the validated manifest, evaluates each declared assertion against artifacts under `--case-dir`, and emits a JSON `CaseScore` record to stdout. Each per-assertion outcome is one of:
+
+- `passed` — the assertion holds against the captured trace. Carries a citation (`evidence.artifact_path` plus a `detail` locator) that resolves to a real captured file.
+- `failed` — the assertion does not hold against the captured trace. Carries the same citation shape plus the `expected` and `observed` values for the discrepancy.
+- `inconclusive` — the captured trace lacks the structural evidence required to evaluate the assertion. Carries a discriminated `reason` naming the missing evidence (`dom_snapshot_unavailable` when the post-submit DOM is absent; `observability_source_missing` when the manifest does not declare the trace source the assertion needs) plus a numbered `recovery` procedure the caller follows to make the assertion evaluable on a subsequent run.
+
+Resolvable assertion: `final_response_contains` matches the expected substring against visible text extracted from the post-submit DOM snapshot (`<case-dir>/trace/dom/step-<NNN>-after_submit.html`), with `<script>`, `<style>`, `<noscript>`, `<template>`, and HTML comments stripped before matching. Assertions sourced from observability streams (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to `inconclusive` whose `reason.needed_evidence` names the trace source the manifest must declare.
+
+Exit 0 once scoring completes, regardless of pass / fail / inconclusive counts. Exit 1 only on manifest load errors, an unknown `--case` id, or a missing / non-directory `--case-dir`.
+
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
@@ -91,7 +107,12 @@ Follow these steps in order. Do not skip or reorder them.
     - **The whole agent (every declared case).** Invoke `plan_swarm.py` to expand the manifest into a JSON fan-out plan. Parse the plan's `entries` array. Dispatch one Agent sub-task per entry IN A SINGLE MESSAGE so every case runs in parallel under its own isolated browser context. Each sub-task's prompt must instruct the sub-agent to invoke the entry's `driver_invocation.script` with the entry's `driver_invocation.arguments` exactly as supplied — do NOT modify the argv. Every entry's argv pins the same `--run-id`, so all sibling sub-agents write into one shared `runs/<agent>/<run_id>/` directory. After all sub-tasks complete, compose results from the captured artifacts under each entry's `case_dir`; never re-run a case at the orchestrator level.
     - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
-5. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+5. **Score every driven case.** For each `case_dir` produced by step 4, invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>`. Parse the JSON `CaseScore` record. The orchestrator narrates results to the user from these records, NEVER from intuition or visual scan of the screenshots. For each per-assertion outcome:
+    - `passed` — narrate the success and cite `evidence.artifact_path`. The path resolves to a real captured file the user can open.
+    - `failed` — narrate the discrepancy with `expected` vs `observed` and cite `evidence.artifact_path`.
+    - `inconclusive` — relay `reason.recovery` verbatim. Do NOT guess, infer, or pattern-match the assertion against screenshots; the inconclusive outcome means the structural evidence required for evaluation is absent. Suggest the manifest changes named in the recovery procedure (declare the named observability source, re-run with `--submit`, etc.).
+
+6. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
 ## Design principles
 
