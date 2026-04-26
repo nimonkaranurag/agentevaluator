@@ -13,8 +13,11 @@ from evaluate_agent.scoring.scores.rollups import (
     CaseOutcomeRollup,
 )
 
-from .citation_validator import validate_citations
-from .render_case_score import compose_case_section
+from evaluate_agent.report.common.citation_validator import (
+    validate_citations,
+)
+
+from .case_score import compose_case_section
 
 
 def render_agent_score_markdown(
