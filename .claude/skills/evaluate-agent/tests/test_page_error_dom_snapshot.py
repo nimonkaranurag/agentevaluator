@@ -1,5 +1,5 @@
 """
-Unit tests for AutoDOMSnapshotCollector lifecycle, main-frame filtering, step numbering, content persistence, and error recovery.
+Unit tests for PageErrorDOMSnapshotCollector lifecycle, step numbering, content persistence, and error recovery.
 """
 
 from __future__ import annotations
@@ -12,15 +12,10 @@ import pytest
 from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
-from evaluate_agent.driver.capture.event_triggered.auto_dom_snapshot import (
-    AutoDOMSnapshotCollector,
-    AutoDOMSnapshotCollectorAlreadyAttached,
+from evaluate_agent.driver.capture.event_triggered.page_error_dom_snapshot import (
+    PageErrorDOMSnapshotCollector,
+    PageErrorDOMSnapshotCollectorAlreadyAttached,
 )
-
-
-@dataclass
-class FakeFrame:
-    parent_frame: Any = None
 
 
 @dataclass
@@ -78,19 +73,17 @@ def layout(tmp_path: Path) -> RunArtifactLayout:
     )
 
 
-class TestAttachRegistersFrameNavigatedHandler:
+class TestAttachRegistersPageErrorHandler:
     async def test_attach_registers_exactly_one_handler(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        assert set(page.registered.keys()) == {
-            "framenavigated"
-        }
-        assert len(page.registered["framenavigated"]) == 1
+        assert set(page.registered.keys()) == {"pageerror"}
+        assert len(page.registered["pageerror"]) == 1
         collector.detach(page)
         await collector.flush()
 
@@ -98,12 +91,12 @@ class TestAttachRegistersFrameNavigatedHandler:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         with pytest.raises(
-            AutoDOMSnapshotCollectorAlreadyAttached
+            PageErrorDOMSnapshotCollectorAlreadyAttached
         ) as info:
             collector.attach(FakePage())
         message = str(info.value)
@@ -117,19 +110,19 @@ class TestAttachRegistersFrameNavigatedHandler:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         collector.detach(page)
-        assert page.registered["framenavigated"] == []
+        assert page.registered["pageerror"] == []
         await collector.flush()
 
     async def test_detach_without_attach_is_a_noop(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.detach(page)
@@ -137,73 +130,71 @@ class TestAttachRegistersFrameNavigatedHandler:
         await collector.flush()
 
 
-class TestMainFrameFilter:
-    async def test_main_frame_event_triggers_capture(
+class TestPageErrorEventTriggersCapture:
+    async def test_pageerror_with_string_payload_captures_dom(
         self, layout: RunArtifactLayout
     ) -> None:
-        page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        page = FakePage(
+            html="<!doctype html><h1>broken</h1>"
+        )
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "TypeError: x is undefined")
         await collector.flush()
         collector.detach(page)
         expected = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+            "c", 1, "pageerror"
         )
         assert expected.exists()
-        assert page.content_calls == 1
+        assert expected.read_text(encoding="utf-8") == (
+            "<!doctype html><h1>broken</h1>"
+        )
 
-    async def test_subframe_event_is_ignored(
+    async def test_pageerror_with_error_object_payload_captures_dom(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        main_frame = FakeFrame()
-        subframe = FakeFrame(parent_frame=main_frame)
-        page.emit("framenavigated", subframe)
-        await collector.flush()
-        collector.detach(page)
-        assert not layout.dom_snapshot_dir("c").exists()
-        assert page.content_calls == 0
-
-    async def test_subframe_does_not_advance_counter(
-        self, layout: RunArtifactLayout
-    ) -> None:
-        page = FakePage()
-        collector = AutoDOMSnapshotCollector(
-            layout=layout, case_id="c"
-        )
-        collector.attach(page)
-        main_frame = FakeFrame()
-        page.emit(
-            "framenavigated",
-            FakeFrame(parent_frame=main_frame),
-        )
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", RuntimeError("oops"))
         await collector.flush()
         collector.detach(page)
         expected = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+            "c", 1, "pageerror"
         )
         assert expected.exists()
 
 
 class TestStepNumbering:
+    async def test_first_capture_is_step_001(
+        self, layout: RunArtifactLayout
+    ) -> None:
+        page = FakePage()
+        collector = PageErrorDOMSnapshotCollector(
+            layout=layout, case_id="c"
+        )
+        collector.attach(page)
+        page.emit("pageerror", "Error")
+        await collector.flush()
+        collector.detach(page)
+        assert layout.auto_dom_snapshot_path(
+            "c", 1, "pageerror"
+        ).exists()
+
     async def test_monotonic_increment_across_events(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         for _ in range(3):
-            page.emit("framenavigated", FakeFrame())
+            page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
         dom_dir = layout.dom_snapshot_dir("c")
@@ -211,9 +202,9 @@ class TestStepNumbering:
             p.name for p in dom_dir.iterdir()
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
-            "auto-003-nav.html",
+            "auto-001-pageerror.html",
+            "auto-002-pageerror.html",
+            "auto-003-pageerror.html",
         ]
 
     async def test_counter_independent_per_collector(
@@ -221,17 +212,17 @@ class TestStepNumbering:
     ) -> None:
         first_page = FakePage()
         second_page = FakePage()
-        first = AutoDOMSnapshotCollector(
+        first = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="case_one"
         )
-        second = AutoDOMSnapshotCollector(
+        second = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="case_two"
         )
         first.attach(first_page)
         second.attach(second_page)
-        first_page.emit("framenavigated", FakeFrame())
-        first_page.emit("framenavigated", FakeFrame())
-        second_page.emit("framenavigated", FakeFrame())
+        first_page.emit("pageerror", "E")
+        first_page.emit("pageerror", "E")
+        second_page.emit("pageerror", "E")
         await first.flush()
         await second.flush()
         first.detach(first_page)
@@ -241,12 +232,12 @@ class TestStepNumbering:
         assert sorted(
             p.name for p in first_dir.iterdir()
         ) == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
+            "auto-001-pageerror.html",
+            "auto-002-pageerror.html",
         ]
         assert sorted(
             p.name for p in second_dir.iterdir()
-        ) == ["auto-001-nav.html"]
+        ) == ["auto-001-pageerror.html"]
 
 
 class TestContentPersistence:
@@ -254,18 +245,20 @@ class TestContentPersistence:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage(
-            html="<!doctype html><h1>hello</h1>"
+            html="<!doctype html><h1>broken</h1>"
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
+        path = layout.auto_dom_snapshot_path(
+            "c", 1, "pageerror"
+        )
         assert path.read_text(encoding="utf-8") == (
-            "<!doctype html><h1>hello</h1>"
+            "<!doctype html><h1>broken</h1>"
         )
 
     async def test_preserves_non_ascii_characters(
@@ -274,31 +267,19 @@ class TestContentPersistence:
         page = FakePage(
             html="<p>héllo — 世界 — café ☕</p>"
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
+        path = layout.auto_dom_snapshot_path(
+            "c", 1, "pageerror"
+        )
         assert path.read_text(encoding="utf-8") == (
             "<p>héllo — 世界 — café ☕</p>"
         )
-
-    async def test_writes_to_shared_dom_dir(
-        self, layout: RunArtifactLayout
-    ) -> None:
-        page = FakePage()
-        collector = AutoDOMSnapshotCollector(
-            layout=layout, case_id="c"
-        )
-        collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
-        await collector.flush()
-        collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
-        assert path.parent == layout.dom_snapshot_dir("c")
 
 
 class TestLifecycleAfterDetach:
@@ -306,20 +287,20 @@ class TestLifecycleAfterDetach:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         dom_dir = layout.dom_snapshot_dir("c")
         filenames = sorted(
             p.name for p in dom_dir.iterdir()
         )
-        assert filenames == ["auto-001-nav.html"]
+        assert filenames == ["auto-001-pageerror.html"]
         assert page.content_calls == 1
 
     async def test_detach_then_attach_continues_counter(
@@ -327,15 +308,15 @@ class TestLifecycleAfterDetach:
     ) -> None:
         first = FakePage()
         second = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(first)
-        first.emit("framenavigated", FakeFrame())
+        first.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(first)
         collector.attach(second)
-        second.emit("framenavigated", FakeFrame())
+        second.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(second)
         dom_dir = layout.dom_snapshot_dir("c")
@@ -343,8 +324,8 @@ class TestLifecycleAfterDetach:
             p.name for p in dom_dir.iterdir()
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
+            "auto-001-pageerror.html",
+            "auto-002-pageerror.html",
         ]
 
 
@@ -352,7 +333,7 @@ class TestFlush:
     async def test_flush_with_no_pending_is_a_noop(
         self, layout: RunArtifactLayout
     ) -> None:
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         await collector.flush()
@@ -364,15 +345,15 @@ class TestFlush:
         page = FakePage(
             raise_on_content=RuntimeError("page closed")
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
         failed_path = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+            "c", 1, "pageerror"
         )
         assert not failed_path.exists()
 
@@ -386,13 +367,13 @@ class TestFlush:
                 None,
             ]
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
-        page.emit("framenavigated", FakeFrame())
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "E")
+        page.emit("pageerror", "E")
+        page.emit("pageerror", "E")
         await collector.flush()
         collector.detach(page)
         dom_dir = layout.dom_snapshot_dir("c")
@@ -400,30 +381,32 @@ class TestFlush:
             p.name for p in dom_dir.iterdir()
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-003-nav.html",
+            "auto-001-pageerror.html",
+            "auto-003-pageerror.html",
         ]
 
 
-class TestCoexistenceWithExplicitSnapshots:
-    async def test_auto_and_explicit_files_do_not_collide(
+class TestCoexistenceWithNavSnapshots:
+    async def test_pageerror_and_nav_files_share_dir_without_collision(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorDOMSnapshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        auto_path = layout.auto_dom_snapshot_path(
+        pageerror_path = layout.auto_dom_snapshot_path(
+            "c", 1, "pageerror"
+        )
+        nav_path = layout.auto_dom_snapshot_path(
             "c", 1, "nav"
         )
-        explicit_path = layout.dom_snapshot_path(
-            "c", 1, "nav"
+        assert pageerror_path != nav_path
+        assert pageerror_path.parent == nav_path.parent
+        assert pageerror_path.name == (
+            "auto-001-pageerror.html"
         )
-        assert auto_path != explicit_path
-        assert auto_path.name.startswith("auto-")
-        assert explicit_path.name.startswith("step-")
-        assert auto_path.parent == explicit_path.parent
+        assert nav_path.name == "auto-001-nav.html"

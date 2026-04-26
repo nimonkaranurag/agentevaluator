@@ -12,7 +12,7 @@ import pytest
 from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
-from evaluate_agent.driver.auto_screenshot import (
+from evaluate_agent.driver.capture.event_triggered.auto_screenshot import (
     AutoScreenshotCollector,
     AutoScreenshotCollectorAlreadyAttached,
 )

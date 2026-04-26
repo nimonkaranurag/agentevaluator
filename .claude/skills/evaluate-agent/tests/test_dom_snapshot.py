@@ -11,7 +11,7 @@ import pytest
 from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
-from evaluate_agent.driver.dom_snapshot import (
+from evaluate_agent.driver.capture.explicit.dom_snapshot import (
     DOMSnapshotter,
     InvalidDOMSnapshotLabel,
 )

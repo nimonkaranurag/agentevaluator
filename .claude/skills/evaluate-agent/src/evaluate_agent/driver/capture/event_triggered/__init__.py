@@ -1,44 +1,31 @@
 """
-Playwright driver for live-agent evaluation.
+Event-triggered evidence capture subscribed to live page events.
 """
 
-from .auth import (
-    MissingAuthEnvVar,
-    context_kwargs_for,
-)
-from .capture import (
+from .auto_dom_snapshot import (
     NAVIGATED_EVENT,
     NAVIGATED_EVENT_SUFFIX,
-    PAGE_ERROR_EVENT,
-    PAGE_ERROR_EVENT_SUFFIX,
     AutoDOMSnapshotCollector,
     AutoDOMSnapshotCollectorAlreadyAttached,
+    NavigatedFrame,
+)
+from .auto_screenshot import (
     AutoScreenshotCollector,
     AutoScreenshotCollectorAlreadyAttached,
-    DOMSnapshotable,
-    DOMSnapshotter,
+)
+from .base import (
     EventTriggeredCaptureCollector,
     EventTriggeredCapturePage,
-    InvalidDOMSnapshotLabel,
-    InvalidScreenshotLabel,
-    NavigatedFrame,
+)
+from .page_error_dom_snapshot import (
+    PAGE_ERROR_EVENT,
+    PAGE_ERROR_EVENT_SUFFIX,
     PageErrorDOMSnapshotCollector,
     PageErrorDOMSnapshotCollectorAlreadyAttached,
+)
+from .page_error_screenshot import (
     PageErrorScreenshotCollector,
     PageErrorScreenshotCollectorAlreadyAttached,
-    Screenshotable,
-    Screenshotter,
-)
-from .interact import (
-    InputElementNotFound,
-    submit_case_input,
-)
-from .session import Session, open_session
-from .trace import (
-    PageEventEmitter,
-    TraceCollector,
-    TraceCollectorAlreadyAttached,
-    collect_trace,
 )
 
 __all__ = [
@@ -46,14 +33,8 @@ __all__ = [
     "AutoDOMSnapshotCollectorAlreadyAttached",
     "AutoScreenshotCollector",
     "AutoScreenshotCollectorAlreadyAttached",
-    "DOMSnapshotable",
-    "DOMSnapshotter",
     "EventTriggeredCaptureCollector",
     "EventTriggeredCapturePage",
-    "InputElementNotFound",
-    "InvalidDOMSnapshotLabel",
-    "InvalidScreenshotLabel",
-    "MissingAuthEnvVar",
     "NAVIGATED_EVENT",
     "NAVIGATED_EVENT_SUFFIX",
     "NavigatedFrame",
@@ -63,14 +44,4 @@ __all__ = [
     "PageErrorDOMSnapshotCollectorAlreadyAttached",
     "PageErrorScreenshotCollector",
     "PageErrorScreenshotCollectorAlreadyAttached",
-    "PageEventEmitter",
-    "Screenshotable",
-    "Screenshotter",
-    "Session",
-    "TraceCollector",
-    "TraceCollectorAlreadyAttached",
-    "collect_trace",
-    "context_kwargs_for",
-    "open_session",
-    "submit_case_input",
 ]

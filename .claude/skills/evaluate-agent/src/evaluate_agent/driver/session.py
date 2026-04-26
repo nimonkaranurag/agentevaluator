@@ -19,8 +19,12 @@ from ..artifact_layout import (
     TraceArtifactPaths,
 )
 from .auth import context_kwargs_for
-from .auto_dom_snapshot import AutoDOMSnapshotCollector
-from .auto_screenshot import AutoScreenshotCollector
+from .capture import (
+    AutoDOMSnapshotCollector,
+    AutoScreenshotCollector,
+    PageErrorDOMSnapshotCollector,
+    PageErrorScreenshotCollector,
+)
 from .trace import collect_trace
 
 
@@ -47,6 +51,12 @@ async def open_session(
     auto_screenshot = AutoScreenshotCollector(
         layout=layout, case_id=case_id
     )
+    page_error_dom = PageErrorDOMSnapshotCollector(
+        layout=layout, case_id=case_id
+    )
+    page_error_screenshot = PageErrorScreenshotCollector(
+        layout=layout, case_id=case_id
+    )
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=headless
@@ -65,6 +75,8 @@ async def open_session(
                     collector.attach(page)
                     auto_dom.attach(page)
                     auto_screenshot.attach(page)
+                    page_error_dom.attach(page)
+                    page_error_screenshot.attach(page)
                     try:
                         await page.goto(str(access.url))
                         yield Session(
@@ -72,8 +84,12 @@ async def open_session(
                             trace_paths=trace_paths,
                         )
                     finally:
+                        await page_error_screenshot.flush()
+                        await page_error_dom.flush()
                         await auto_screenshot.flush()
                         await auto_dom.flush()
+                        page_error_screenshot.detach(page)
+                        page_error_dom.detach(page)
                         auto_screenshot.detach(page)
                         auto_dom.detach(page)
                         collector.detach(page)

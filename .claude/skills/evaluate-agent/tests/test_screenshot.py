@@ -1,5 +1,5 @@
 """
-Unit tests for Capture step numbering, artifact paths, and label validation.
+Unit tests for Screenshotter step numbering, artifact paths, and label validation.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ import pytest
 from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
-from evaluate_agent.driver.capture import (
-    Capture,
-    InvalidCaptureLabel,
+from evaluate_agent.driver.capture.explicit.screenshot import (
+    InvalidScreenshotLabel,
+    Screenshotter,
 )
 
 
@@ -41,8 +41,10 @@ class TestScreenshotStepNumbering:
     async def test_first_screenshot_is_step_001(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(layout=layout, case_id="case")
-        path = await capture.screenshot(
+        screenshotter = Screenshotter(
+            layout=layout, case_id="case"
+        )
+        path = await screenshotter.screenshot(
             FakePage(), "landing"
         )
         assert path.name == "step-001-landing.png"
@@ -50,11 +52,13 @@ class TestScreenshotStepNumbering:
     async def test_step_counter_increments_across_calls(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(layout=layout, case_id="case")
+        screenshotter = Screenshotter(
+            layout=layout, case_id="case"
+        )
         page = FakePage()
-        p1 = await capture.screenshot(page, "a")
-        p2 = await capture.screenshot(page, "b")
-        p3 = await capture.screenshot(page, "c")
+        p1 = await screenshotter.screenshot(page, "a")
+        p2 = await screenshotter.screenshot(page, "b")
+        p3 = await screenshotter.screenshot(page, "c")
         assert p1.name == "step-001-a.png"
         assert p2.name == "step-002-b.png"
         assert p3.name == "step-003-c.png"
@@ -64,8 +68,10 @@ class TestArtifactPath:
     async def test_creates_case_directory_lazily(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(layout=layout, case_id="case")
-        path = await capture.screenshot(
+        screenshotter = Screenshotter(
+            layout=layout, case_id="case"
+        )
+        path = await screenshotter.screenshot(
             FakePage(), "landing"
         )
         assert path.parent.is_dir()
@@ -74,9 +80,13 @@ class TestArtifactPath:
     async def test_screenshot_written_to_returned_path(
         self, layout: RunArtifactLayout
     ) -> None:
-        capture = Capture(layout=layout, case_id="case")
+        screenshotter = Screenshotter(
+            layout=layout, case_id="case"
+        )
         page = FakePage()
-        path = await capture.screenshot(page, "landing")
+        path = await screenshotter.screenshot(
+            page, "landing"
+        )
         assert page.screenshots_taken == [str(path)]
 
 
@@ -90,6 +100,10 @@ class TestLabelValidation:
         layout: RunArtifactLayout,
         bad_label: str,
     ) -> None:
-        capture = Capture(layout=layout, case_id="c")
-        with pytest.raises(InvalidCaptureLabel):
-            await capture.screenshot(FakePage(), bad_label)
+        screenshotter = Screenshotter(
+            layout=layout, case_id="c"
+        )
+        with pytest.raises(InvalidScreenshotLabel):
+            await screenshotter.screenshot(
+                FakePage(), bad_label
+            )

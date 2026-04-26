@@ -1,5 +1,5 @@
 """
-Unit tests for AutoDOMSnapshotCollector lifecycle, main-frame filtering, step numbering, content persistence, and error recovery.
+Unit tests for PageErrorScreenshotCollector lifecycle, step numbering, content persistence, error recovery, and coexistence with auto-on-nav screenshots.
 """
 
 from __future__ import annotations
@@ -12,30 +12,25 @@ import pytest
 from evaluate_agent.artifact_layout import (
     RunArtifactLayout,
 )
-from evaluate_agent.driver.capture.event_triggered.auto_dom_snapshot import (
-    AutoDOMSnapshotCollector,
-    AutoDOMSnapshotCollectorAlreadyAttached,
+from evaluate_agent.driver.capture.event_triggered.page_error_screenshot import (
+    PageErrorScreenshotCollector,
+    PageErrorScreenshotCollectorAlreadyAttached,
 )
 
 
 @dataclass
-class FakeFrame:
-    parent_frame: Any = None
-
-
-@dataclass
 class FakePage:
-    html: str = (
-        "<!doctype html><html><body>ok</body></html>"
-    )
-    content_calls: int = 0
-    raise_on_content: BaseException | None = None
-    raise_on_content_calls: list[BaseException | None] = (
-        field(default_factory=list)
-    )
     registered: dict[str, list[Callable[[Any], None]]] = (
         field(default_factory=dict)
     )
+    screenshots_taken: list[str] = field(
+        default_factory=list
+    )
+    raise_on_screenshot: BaseException | None = None
+    raise_on_screenshot_calls: list[
+        BaseException | None
+    ] = field(default_factory=list)
+    screenshot_payload: bytes = b"fake-png-bytes"
 
     def on(
         self,
@@ -57,16 +52,19 @@ class FakePage:
         for handler in list(self.registered.get(event, [])):
             handler(payload)
 
-    async def content(self) -> str:
-        self.content_calls += 1
+    async def screenshot(
+        self, *, path: str
+    ) -> bytes | None:
         per_call = (
-            self.raise_on_content_calls.pop(0)
-            if self.raise_on_content_calls
-            else self.raise_on_content
+            self.raise_on_screenshot_calls.pop(0)
+            if self.raise_on_screenshot_calls
+            else self.raise_on_screenshot
         )
         if per_call is not None:
             raise per_call
-        return self.html
+        Path(path).write_bytes(self.screenshot_payload)
+        self.screenshots_taken.append(path)
+        return self.screenshot_payload
 
 
 @pytest.fixture
@@ -78,19 +76,17 @@ def layout(tmp_path: Path) -> RunArtifactLayout:
     )
 
 
-class TestAttachRegistersFrameNavigatedHandler:
+class TestAttachRegistersPageErrorHandler:
     async def test_attach_registers_exactly_one_handler(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        assert set(page.registered.keys()) == {
-            "framenavigated"
-        }
-        assert len(page.registered["framenavigated"]) == 1
+        assert set(page.registered.keys()) == {"pageerror"}
+        assert len(page.registered["pageerror"]) == 1
         collector.detach(page)
         await collector.flush()
 
@@ -98,12 +94,12 @@ class TestAttachRegistersFrameNavigatedHandler:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         with pytest.raises(
-            AutoDOMSnapshotCollectorAlreadyAttached
+            PageErrorScreenshotCollectorAlreadyAttached
         ) as info:
             collector.attach(FakePage())
         message = str(info.value)
@@ -117,19 +113,19 @@ class TestAttachRegistersFrameNavigatedHandler:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         collector.detach(page)
-        assert page.registered["framenavigated"] == []
+        assert page.registered["pageerror"] == []
         await collector.flush()
 
     async def test_detach_without_attach_is_a_noop(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.detach(page)
@@ -137,83 +133,79 @@ class TestAttachRegistersFrameNavigatedHandler:
         await collector.flush()
 
 
-class TestMainFrameFilter:
-    async def test_main_frame_event_triggers_capture(
+class TestPageErrorEventTriggersCapture:
+    async def test_pageerror_with_string_payload_captures_screenshot(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "TypeError: x is undefined")
         await collector.flush()
         collector.detach(page)
-        expected = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+        expected = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
         )
         assert expected.exists()
-        assert page.content_calls == 1
+        assert page.screenshots_taken == [str(expected)]
 
-    async def test_subframe_event_is_ignored(
+    async def test_pageerror_with_error_object_payload_captures_screenshot(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        main_frame = FakeFrame()
-        subframe = FakeFrame(parent_frame=main_frame)
-        page.emit("framenavigated", subframe)
+        page.emit("pageerror", RuntimeError("oops"))
         await collector.flush()
         collector.detach(page)
-        assert not layout.dom_snapshot_dir("c").exists()
-        assert page.content_calls == 0
-
-    async def test_subframe_does_not_advance_counter(
-        self, layout: RunArtifactLayout
-    ) -> None:
-        page = FakePage()
-        collector = AutoDOMSnapshotCollector(
-            layout=layout, case_id="c"
-        )
-        collector.attach(page)
-        main_frame = FakeFrame()
-        page.emit(
-            "framenavigated",
-            FakeFrame(parent_frame=main_frame),
-        )
-        page.emit("framenavigated", FakeFrame())
-        await collector.flush()
-        collector.detach(page)
-        expected = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+        expected = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
         )
         assert expected.exists()
 
 
 class TestStepNumbering:
+    async def test_first_capture_is_step_001(
+        self, layout: RunArtifactLayout
+    ) -> None:
+        page = FakePage()
+        collector = PageErrorScreenshotCollector(
+            layout=layout, case_id="c"
+        )
+        collector.attach(page)
+        page.emit("pageerror", "Error")
+        await collector.flush()
+        collector.detach(page)
+        assert layout.auto_screenshot_path(
+            "c", 1, "pageerror"
+        ).exists()
+
     async def test_monotonic_increment_across_events(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
         for _ in range(3):
-            page.emit("framenavigated", FakeFrame())
+            page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        dom_dir = layout.dom_snapshot_dir("c")
+        case_dir = layout.case_dir("c")
         filenames = sorted(
-            p.name for p in dom_dir.iterdir()
+            p.name
+            for p in case_dir.iterdir()
+            if p.suffix == ".png"
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
-            "auto-003-nav.html",
+            "auto-001-pageerror.png",
+            "auto-002-pageerror.png",
+            "auto-003-pageerror.png",
         ]
 
     async def test_counter_independent_per_collector(
@@ -221,84 +213,70 @@ class TestStepNumbering:
     ) -> None:
         first_page = FakePage()
         second_page = FakePage()
-        first = AutoDOMSnapshotCollector(
+        first = PageErrorScreenshotCollector(
             layout=layout, case_id="case_one"
         )
-        second = AutoDOMSnapshotCollector(
+        second = PageErrorScreenshotCollector(
             layout=layout, case_id="case_two"
         )
         first.attach(first_page)
         second.attach(second_page)
-        first_page.emit("framenavigated", FakeFrame())
-        first_page.emit("framenavigated", FakeFrame())
-        second_page.emit("framenavigated", FakeFrame())
+        first_page.emit("pageerror", "E")
+        first_page.emit("pageerror", "E")
+        second_page.emit("pageerror", "E")
         await first.flush()
         await second.flush()
         first.detach(first_page)
         second.detach(second_page)
-        first_dir = layout.dom_snapshot_dir("case_one")
-        second_dir = layout.dom_snapshot_dir("case_two")
+        first_dir = layout.case_dir("case_one")
+        second_dir = layout.case_dir("case_two")
         assert sorted(
-            p.name for p in first_dir.iterdir()
+            p.name
+            for p in first_dir.iterdir()
+            if p.suffix == ".png"
         ) == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
+            "auto-001-pageerror.png",
+            "auto-002-pageerror.png",
         ]
         assert sorted(
-            p.name for p in second_dir.iterdir()
-        ) == ["auto-001-nav.html"]
+            p.name
+            for p in second_dir.iterdir()
+            if p.suffix == ".png"
+        ) == ["auto-001-pageerror.png"]
 
 
 class TestContentPersistence:
-    async def test_writes_rendered_html_to_returned_path(
+    async def test_writes_screenshot_payload_to_returned_path(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage(
-            html="<!doctype html><h1>hello</h1>"
+            screenshot_payload=b"PNG-magic-bytes-here"
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
-        assert path.read_text(encoding="utf-8") == (
-            "<!doctype html><h1>hello</h1>"
+        path = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
         )
+        assert path.read_bytes() == b"PNG-magic-bytes-here"
 
-    async def test_preserves_non_ascii_characters(
-        self, layout: RunArtifactLayout
-    ) -> None:
-        page = FakePage(
-            html="<p>héllo — 世界 — café ☕</p>"
-        )
-        collector = AutoDOMSnapshotCollector(
-            layout=layout, case_id="c"
-        )
-        collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
-        await collector.flush()
-        collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
-        assert path.read_text(encoding="utf-8") == (
-            "<p>héllo — 世界 — café ☕</p>"
-        )
-
-    async def test_writes_to_shared_dom_dir(
+    async def test_creates_case_dir_lazily(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
-            layout=layout, case_id="c"
+        collector = PageErrorScreenshotCollector(
+            layout=layout, case_id="lazy_case"
         )
+        assert not layout.case_dir("lazy_case").exists()
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        path = layout.auto_dom_snapshot_path("c", 1, "nav")
-        assert path.parent == layout.dom_snapshot_dir("c")
+        assert layout.case_dir("lazy_case").is_dir()
 
 
 class TestLifecycleAfterDetach:
@@ -306,45 +284,49 @@ class TestLifecycleAfterDetach:
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
-        dom_dir = layout.dom_snapshot_dir("c")
+        case_dir = layout.case_dir("c")
         filenames = sorted(
-            p.name for p in dom_dir.iterdir()
+            p.name
+            for p in case_dir.iterdir()
+            if p.suffix == ".png"
         )
-        assert filenames == ["auto-001-nav.html"]
-        assert page.content_calls == 1
+        assert filenames == ["auto-001-pageerror.png"]
+        assert len(page.screenshots_taken) == 1
 
     async def test_detach_then_attach_continues_counter(
         self, layout: RunArtifactLayout
     ) -> None:
         first = FakePage()
         second = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(first)
-        first.emit("framenavigated", FakeFrame())
+        first.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(first)
         collector.attach(second)
-        second.emit("framenavigated", FakeFrame())
+        second.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(second)
-        dom_dir = layout.dom_snapshot_dir("c")
+        case_dir = layout.case_dir("c")
         filenames = sorted(
-            p.name for p in dom_dir.iterdir()
+            p.name
+            for p in case_dir.iterdir()
+            if p.suffix == ".png"
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-002-nav.html",
+            "auto-001-pageerror.png",
+            "auto-002-pageerror.png",
         ]
 
 
@@ -352,78 +334,105 @@ class TestFlush:
     async def test_flush_with_no_pending_is_a_noop(
         self, layout: RunArtifactLayout
     ) -> None:
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         await collector.flush()
-        assert not layout.dom_snapshot_dir("c").exists()
+        assert not layout.case_dir("c").exists()
 
     async def test_flush_absorbs_capture_exceptions(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage(
-            raise_on_content=RuntimeError("page closed")
+            raise_on_screenshot=RuntimeError("page closed")
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        failed_path = layout.auto_dom_snapshot_path(
-            "c", 1, "nav"
+        failed_path = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
         )
         assert not failed_path.exists()
+        assert page.screenshots_taken == []
 
     async def test_flush_persists_successful_captures_even_when_one_fails(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage(
-            raise_on_content_calls=[
+            raise_on_screenshot_calls=[
                 None,
                 RuntimeError("boom"),
                 None,
             ]
         )
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
-        page.emit("framenavigated", FakeFrame())
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "E")
+        page.emit("pageerror", "E")
+        page.emit("pageerror", "E")
         await collector.flush()
         collector.detach(page)
-        dom_dir = layout.dom_snapshot_dir("c")
+        case_dir = layout.case_dir("c")
         filenames = sorted(
-            p.name for p in dom_dir.iterdir()
+            p.name
+            for p in case_dir.iterdir()
+            if p.suffix == ".png"
         )
         assert filenames == [
-            "auto-001-nav.html",
-            "auto-003-nav.html",
+            "auto-001-pageerror.png",
+            "auto-003-pageerror.png",
         ]
 
 
-class TestCoexistenceWithExplicitSnapshots:
-    async def test_auto_and_explicit_files_do_not_collide(
+class TestCoexistenceWithNavScreenshots:
+    async def test_pageerror_and_nav_files_share_dir_without_collision(
         self, layout: RunArtifactLayout
     ) -> None:
         page = FakePage()
-        collector = AutoDOMSnapshotCollector(
+        collector = PageErrorScreenshotCollector(
             layout=layout, case_id="c"
         )
         collector.attach(page)
-        page.emit("framenavigated", FakeFrame())
+        page.emit("pageerror", "Error")
         await collector.flush()
         collector.detach(page)
-        auto_path = layout.auto_dom_snapshot_path(
+        pageerror_path = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
+        )
+        nav_path = layout.auto_screenshot_path(
             "c", 1, "nav"
         )
-        explicit_path = layout.dom_snapshot_path(
-            "c", 1, "nav"
+        assert pageerror_path != nav_path
+        assert pageerror_path.parent == nav_path.parent
+        assert pageerror_path.name == (
+            "auto-001-pageerror.png"
         )
-        assert auto_path != explicit_path
-        assert auto_path.name.startswith("auto-")
-        assert explicit_path.name.startswith("step-")
-        assert auto_path.parent == explicit_path.parent
+        assert nav_path.name == "auto-001-nav.png"
+
+    async def test_pageerror_screenshot_pairs_with_pageerror_dom_step_number_independently(
+        self, layout: RunArtifactLayout
+    ) -> None:
+        page = FakePage()
+        collector = PageErrorScreenshotCollector(
+            layout=layout, case_id="c"
+        )
+        collector.attach(page)
+        page.emit("pageerror", "Error")
+        await collector.flush()
+        collector.detach(page)
+        screenshot_path = layout.auto_screenshot_path(
+            "c", 1, "pageerror"
+        )
+        dom_path = layout.auto_dom_snapshot_path(
+            "c", 1, "pageerror"
+        )
+        assert screenshot_path.exists()
+        assert screenshot_path.stem == dom_path.stem
+        assert screenshot_path.suffix == ".png"
+        assert dom_path.suffix == ".html"
