@@ -5,9 +5,7 @@ Tests for visible-text extraction from rendered DOM.
 from __future__ import annotations
 
 import pytest
-from evaluate_agent.scoring.dom_text import (
-    extract_visible_text,
-)
+from evaluate_agent.scoring import extract_visible_text
 
 
 class TestVisibleTags:

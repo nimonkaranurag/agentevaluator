@@ -7,21 +7,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
+from evaluate_agent.manifest.schema import Case, Slug
+from evaluate_agent.scoring.evaluators import (
+    evaluate_final_response_contains,
+    evaluate_max_steps,
+    evaluate_must_call,
+    evaluate_must_not_call,
+    evaluate_must_route_to,
+)
+from evaluate_agent.scoring.outcomes import (
+    AssertionOutcome,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
 )
-
-from ..manifest.schema import Case, Slug
-from .final_response_contains import (
-    evaluate_final_response_contains,
-)
-from .max_steps import evaluate_max_steps
-from .must_call import evaluate_must_call
-from .must_not_call import evaluate_must_not_call
-from .must_route_to import evaluate_must_route_to
-from .outcomes import AssertionOutcome
 
 
 class _Strict(BaseModel):
@@ -111,19 +112,29 @@ def score_case(
         )
 
     for tool in assertions.must_call:
-        outcomes.append(evaluate_must_call(tool))
+        outcomes.append(
+            evaluate_must_call(tool, case_dir=case_dir)
+        )
 
     for tool in assertions.must_not_call:
-        outcomes.append(evaluate_must_not_call(tool))
+        outcomes.append(
+            evaluate_must_not_call(tool, case_dir=case_dir)
+        )
 
     if assertions.must_route_to is not None:
         outcomes.append(
-            evaluate_must_route_to(assertions.must_route_to)
+            evaluate_must_route_to(
+                assertions.must_route_to,
+                case_dir=case_dir,
+            )
         )
 
     if assertions.max_steps is not None:
         outcomes.append(
-            evaluate_max_steps(assertions.max_steps)
+            evaluate_max_steps(
+                assertions.max_steps,
+                case_dir=case_dir,
+            )
         )
 
     return CaseScore(

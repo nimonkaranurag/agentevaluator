@@ -10,6 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
+from evaluate_agent.artifact_layout import RUN_ID_FORMAT
+from evaluate_agent.manifest.schema import Slug
+from evaluate_agent.scoring.outcomes import AssertionKind
+from evaluate_agent.scoring.scores.case_score import (
+    CaseScore,
+)
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -17,11 +23,6 @@ from pydantic import (
     Field,
     model_validator,
 )
-
-from ..artifact_layout import RUN_ID_FORMAT
-from ..manifest.schema import Slug
-from .case_score import CaseScore
-from .outcomes import AssertionKind
 
 TargetedAssertionKind = Literal[
     "must_call",

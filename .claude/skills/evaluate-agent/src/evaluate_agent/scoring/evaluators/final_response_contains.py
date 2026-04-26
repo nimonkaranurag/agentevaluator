@@ -6,20 +6,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .dom_snapshot_resolver import (
-    post_submit_dom_snapshot_dir,
-    resolve_post_submit_dom_snapshot,
-)
-from .dom_text import extract_visible_text
-from .inconclusive_reasons import (
-    DOMSnapshotUnavailable,
-)
-from .outcomes import (
+from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
+    DOMSnapshotUnavailable,
+)
+from evaluate_agent.scoring.resolvers.dom_snapshot import (
+    post_submit_dom_snapshot_dir,
+    resolve_post_submit_dom_snapshot,
 )
 
 _OBSERVED_EXCERPT_MAX_CHARS = 500
@@ -30,10 +27,8 @@ def evaluate_final_response_contains(
     expected_substring: str,
     case_dir: Path,
 ) -> AssertionOutcome:
-    snapshot_path = resolve_post_submit_dom_snapshot(
-        case_dir
-    )
-    if snapshot_path is None:
+    snapshot = resolve_post_submit_dom_snapshot(case_dir)
+    if snapshot is None:
         return AssertionInconclusive(
             assertion_kind="final_response_contains",
             reason=DOMSnapshotUnavailable(
@@ -43,16 +38,13 @@ def evaluate_final_response_contains(
             ),
         )
 
-    rendered_html = snapshot_path.read_text(
-        encoding="utf-8"
-    )
-    visible_text = extract_visible_text(rendered_html)
+    visible_text = snapshot.visible_text
     match_offset = visible_text.find(expected_substring)
     if match_offset >= 0:
         return AssertionPassed(
             assertion_kind="final_response_contains",
             evidence=AssertionEvidence(
-                artifact_path=snapshot_path,
+                artifact_path=snapshot.path,
                 detail=_passed_detail(
                     visible_text=visible_text,
                     expected_substring=expected_substring,
@@ -66,7 +58,7 @@ def evaluate_final_response_contains(
         expected=expected_substring,
         observed=_truncate(visible_text),
         evidence=AssertionEvidence(
-            artifact_path=snapshot_path,
+            artifact_path=snapshot.path,
             detail=(
                 f"expected substring not present in "
                 f"extracted visible text "

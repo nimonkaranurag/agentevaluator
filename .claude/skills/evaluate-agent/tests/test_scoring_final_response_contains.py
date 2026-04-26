@@ -6,16 +6,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.final_response_contains import (
-    evaluate_final_response_contains,
-)
-from evaluate_agent.scoring.inconclusive_reasons import (
-    DOMSnapshotUnavailable,
-)
-from evaluate_agent.scoring.outcomes import (
+from evaluate_agent.scoring import (
     AssertionFailed,
     AssertionInconclusive,
     AssertionPassed,
+    DOMSnapshotUnavailable,
+    evaluate_final_response_contains,
 )
 
 

@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.dom_snapshot_resolver import (
+from evaluate_agent.scoring import (
+    ResolvedDOMSnapshot,
     post_submit_dom_snapshot_dir,
     resolve_post_submit_dom_snapshot,
 )
@@ -89,15 +90,18 @@ class TestResolveReturnsNone:
         )
 
 
-class TestResolveReturnsPath:
+class TestResolveReturnsParsedSnapshot:
     def test_single_after_submit_file(self, tmp_path):
         dom_dir = _seed_case_dir(tmp_path)
         target = dom_dir / "step-002-after_submit.html"
-        target.write_text("<html></html>", encoding="utf-8")
-        assert (
-            resolve_post_submit_dom_snapshot(tmp_path)
-            == target
+        target.write_text(
+            "<html><body><p>hello</p></body></html>",
+            encoding="utf-8",
         )
+        result = resolve_post_submit_dom_snapshot(tmp_path)
+        assert isinstance(result, ResolvedDOMSnapshot)
+        assert result.path == target
+        assert result.visible_text == "hello"
 
     def test_multiple_after_submit_picks_highest_step(
         self, tmp_path
@@ -108,45 +112,47 @@ class TestResolveReturnsPath:
         )
         latest = dom_dir / "step-005-after_submit.html"
         latest.write_text(
-            "<html>latest</html>", encoding="utf-8"
+            "<html><body>latest</body></html>",
+            encoding="utf-8",
         )
         (dom_dir / "step-003-after_submit.html").write_text(
             "<html>middle</html>", encoding="utf-8"
         )
-        assert (
-            resolve_post_submit_dom_snapshot(tmp_path)
-            == latest
-        )
+        result = resolve_post_submit_dom_snapshot(tmp_path)
+        assert result.path == latest
+        assert result.visible_text == "latest"
 
     def test_step_numbers_sorted_numerically(
         self, tmp_path
     ):
         dom_dir = _seed_case_dir(tmp_path)
         (dom_dir / "step-002-after_submit.html").write_text(
-            "<html>two</html>", encoding="utf-8"
+            "<html><body>two</body></html>",
+            encoding="utf-8",
         )
         latest = dom_dir / "step-010-after_submit.html"
         latest.write_text(
-            "<html>ten</html>", encoding="utf-8"
+            "<html><body>ten</body></html>",
+            encoding="utf-8",
         )
-        assert (
-            resolve_post_submit_dom_snapshot(tmp_path)
-            == latest
-        )
+        result = resolve_post_submit_dom_snapshot(tmp_path)
+        assert result.path == latest
+        assert result.visible_text == "ten"
 
     def test_ignores_non_explicit_prefixes(self, tmp_path):
         dom_dir = _seed_case_dir(tmp_path)
         (dom_dir / "auto-002-after_submit.html").write_text(
-            "<html>auto</html>", encoding="utf-8"
+            "<html><body>auto</body></html>",
+            encoding="utf-8",
         )
         target = dom_dir / "step-002-after_submit.html"
         target.write_text(
-            "<html>explicit</html>", encoding="utf-8"
+            "<html><body>explicit</body></html>",
+            encoding="utf-8",
         )
-        assert (
-            resolve_post_submit_dom_snapshot(tmp_path)
-            == target
-        )
+        result = resolve_post_submit_dom_snapshot(tmp_path)
+        assert result.path == target
+        assert result.visible_text == "explicit"
 
     def test_ignores_files_outside_dom_dir(self, tmp_path):
         dom_dir = _seed_case_dir(tmp_path)
@@ -157,9 +163,29 @@ class TestResolveReturnsPath:
         )
         target = dom_dir / "step-002-after_submit.html"
         target.write_text(
-            "<html>real</html>", encoding="utf-8"
+            "<html><body>real</body></html>",
+            encoding="utf-8",
         )
-        assert (
-            resolve_post_submit_dom_snapshot(tmp_path)
-            == target
+        result = resolve_post_submit_dom_snapshot(tmp_path)
+        assert result.path == target
+        assert result.visible_text == "real"
+
+
+class TestResolvedDOMSnapshotShape:
+    def test_frozen(self, tmp_path):
+        dom_dir = _seed_case_dir(tmp_path)
+        target = dom_dir / "step-002-after_submit.html"
+        target.write_text(
+            "<html><body>x</body></html>",
+            encoding="utf-8",
+        )
+        snapshot = resolve_post_submit_dom_snapshot(
+            tmp_path
+        )
+        try:
+            snapshot.path = target  # type: ignore[misc]
+        except Exception:
+            return
+        raise AssertionError(
+            "ResolvedDOMSnapshot is not frozen"
         )

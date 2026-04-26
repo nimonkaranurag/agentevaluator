@@ -2,34 +2,21 @@
 Score captured cases against their declared assertions.
 """
 
-from .agent_score import (
-    ASSERTION_KIND_SCHEMA_ORDER,
-    AgentRollup,
-    AgentScore,
-    AssertionKindRollup,
-    AssertionTargetRollup,
-    CaseOutcomeRollup,
-    TargetedAssertionKind,
-    score_agent,
-)
-from .case_score import CaseScore, score_case
-from .dom_snapshot_resolver import (
-    post_submit_dom_snapshot_dir,
-    resolve_post_submit_dom_snapshot,
-)
-from .dom_text import extract_visible_text
-from .final_response_contains import (
+from .evaluators import (
     evaluate_final_response_contains,
+    evaluate_max_steps,
+    evaluate_must_call,
+    evaluate_must_not_call,
+    evaluate_must_route_to,
 )
-from .inconclusive_reasons import (
-    DOMSnapshotUnavailable,
-    InconclusiveReason,
-    ObservabilitySourceMissing,
+from .observability import (
+    ObservabilityLogMalformedError,
+    RoutingDecision,
+    StepCount,
+    ToolCall,
+    parse_jsonl_log,
+    parse_single_json_log,
 )
-from .max_steps import evaluate_max_steps
-from .must_call import evaluate_must_call
-from .must_not_call import evaluate_must_not_call
-from .must_route_to import evaluate_must_route_to
 from .outcomes import (
     AssertionEvidence,
     AssertionFailed,
@@ -37,6 +24,37 @@ from .outcomes import (
     AssertionKind,
     AssertionOutcome,
     AssertionPassed,
+    DOMSnapshotUnavailable,
+    InconclusiveReason,
+    ObservabilityLogMalformed,
+    ObservabilitySourceMissing,
+)
+from .resolvers import (
+    ResolvedDOMSnapshot,
+    ResolvedRoutingDecisionLog,
+    ResolvedStepCount,
+    ResolvedToolCallLog,
+    extract_visible_text,
+    post_submit_dom_snapshot_dir,
+    resolve_post_submit_dom_snapshot,
+    resolve_routing_decision_log,
+    resolve_step_count,
+    resolve_tool_call_log,
+    routing_decision_log_path,
+    step_count_path,
+    tool_call_log_path,
+)
+from .scores import (
+    ASSERTION_KIND_SCHEMA_ORDER,
+    AgentRollup,
+    AgentScore,
+    AssertionKindRollup,
+    AssertionTargetRollup,
+    CaseOutcomeRollup,
+    CaseScore,
+    TargetedAssertionKind,
+    score_agent,
+    score_case,
 )
 
 __all__ = [
@@ -55,16 +73,33 @@ __all__ = [
     "CaseScore",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
+    "ObservabilityLogMalformed",
+    "ObservabilityLogMalformedError",
     "ObservabilitySourceMissing",
+    "ResolvedDOMSnapshot",
+    "ResolvedRoutingDecisionLog",
+    "ResolvedStepCount",
+    "ResolvedToolCallLog",
+    "RoutingDecision",
+    "StepCount",
     "TargetedAssertionKind",
+    "ToolCall",
     "evaluate_final_response_contains",
     "evaluate_max_steps",
     "evaluate_must_call",
     "evaluate_must_not_call",
     "evaluate_must_route_to",
     "extract_visible_text",
+    "parse_jsonl_log",
+    "parse_single_json_log",
     "post_submit_dom_snapshot_dir",
     "resolve_post_submit_dom_snapshot",
+    "resolve_routing_decision_log",
+    "resolve_step_count",
+    "resolve_tool_call_log",
+    "routing_decision_log_path",
     "score_agent",
     "score_case",
+    "step_count_path",
+    "tool_call_log_path",
 ]
