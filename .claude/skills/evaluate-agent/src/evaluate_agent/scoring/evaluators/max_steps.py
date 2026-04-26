@@ -6,47 +6,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilityLogMalformed,
-    ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.step_count import (
+from evaluate_agent.scoring.resolvers.other_resolvers.step_count import (  # noqa: E501
     resolve_step_count,
     step_count_path,
 )
+
+from .utils import resolve_observability_log
 
 
 def evaluate_max_steps(
     step_limit: int,
     case_dir: Path,
 ) -> AssertionOutcome:
-    try:
-        record = resolve_step_count(case_dir)
-    except ObservabilityLogMalformedError as exc:
-        return AssertionInconclusive(
-            assertion_kind="max_steps",
-            reason=ObservabilityLogMalformed.from_error(
-                exc
-            ),
-        )
-    if record is None:
-        return AssertionInconclusive(
-            assertion_kind="max_steps",
-            reason=ObservabilitySourceMissing(
-                needed_evidence="step_count",
-                expected_artifact_path=(
-                    step_count_path(case_dir)
-                ),
-            ),
-        )
+    record = resolve_observability_log(
+        case_dir=case_dir,
+        assertion_kind="max_steps",
+        target=None,
+        needed_evidence="step_count",
+        resolve=resolve_step_count,
+        log_path=step_count_path,
+    )
+    if isinstance(record, AssertionInconclusive):
+        return record
     observed_steps = record.record.total_steps
     if observed_steps <= step_limit:
         return AssertionPassed(

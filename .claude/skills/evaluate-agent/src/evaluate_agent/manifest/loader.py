@@ -7,13 +7,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
-
-from .errors import (
+from evaluate_agent.common.errors.manifest import (
     ManifestNotFoundError,
     ManifestSyntaxError,
     ManifestValidationError,
 )
+from pydantic import ValidationError
+
 from .schema import AgentManifest
 
 

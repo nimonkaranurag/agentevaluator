@@ -13,7 +13,7 @@ from .auto_screenshot import (
     AutoScreenshotCollector,
     AutoScreenshotCollectorAlreadyAttached,
 )
-from .base import (
+from .collector_base import (
     EventTriggeredCaptureCollector,
     EventTriggeredCapturePage,
 )

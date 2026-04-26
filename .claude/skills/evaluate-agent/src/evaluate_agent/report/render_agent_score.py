@@ -4,13 +4,16 @@ Render an AgentScore as a citation-grounded Markdown narrative.
 
 from __future__ import annotations
 
-from ..scoring import (
+from evaluate_agent.common.errors.report import (
+    UnresolvedCitationError,
+)
+from evaluate_agent.scoring import AgentScore
+from evaluate_agent.scoring.scores.rollups import (
     AgentRollup,
-    AgentScore,
     CaseOutcomeRollup,
 )
+
 from .citation_validator import validate_citations
-from .errors import UnresolvedCitationError
 from .render_case_score import compose_case_section
 
 

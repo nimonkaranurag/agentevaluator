@@ -14,7 +14,7 @@ from evaluate_agent.scoring.outcomes import (
     AssertionPassed,
     DOMSnapshotUnavailable,
 )
-from evaluate_agent.scoring.resolvers.dom_snapshot import (
+from evaluate_agent.scoring.resolvers.other_resolvers.dom_snapshot import (  # noqa: E501
     post_submit_dom_snapshot_dir,
     resolve_post_submit_dom_snapshot,
 )

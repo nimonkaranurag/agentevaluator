@@ -1,4 +1,0 @@
-# deliberately missing name AND has an empty cases list — two errors
-access:
-  url: https://example.com/chat
-cases: []

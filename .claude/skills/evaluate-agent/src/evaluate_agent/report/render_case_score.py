@@ -4,17 +4,22 @@ Render a CaseScore as a citation-grounded Markdown narrative.
 
 from __future__ import annotations
 
-from ..scoring import (
+from evaluate_agent.common.errors.report import (
+    UnresolvedCitationError,
+)
+from evaluate_agent.scoring import (
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
     CaseScore,
+)
+from evaluate_agent.scoring.outcomes import (
     DOMSnapshotUnavailable,
     ObservabilitySourceMissing,
 )
+
 from .citation_validator import validate_citations
-from .errors import UnresolvedCitationError
 
 
 def render_case_score_markdown(

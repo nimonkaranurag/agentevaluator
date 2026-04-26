@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from .base import (
+from .collector_base import (
     EventTriggeredCaptureCollector,
     EventTriggeredCapturePage,
 )

@@ -12,7 +12,7 @@ from .auto_dom_snapshot import (
     NAVIGATED_EVENT_SUFFIX,
     NavigatedFrame,
 )
-from .base import (
+from .collector_base import (
     EventTriggeredCaptureCollector,
     EventTriggeredCapturePage,
 )

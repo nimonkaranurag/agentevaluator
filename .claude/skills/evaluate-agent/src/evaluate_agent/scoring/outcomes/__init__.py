@@ -2,19 +2,19 @@
 Outcome data shapes — passed/failed/inconclusive plus the citation evidence.
 """
 
-from .inconclusive_reasons import (
-    DOMSnapshotUnavailable,
-    InconclusiveReason,
-    ObservabilityLogMalformed,
-    ObservabilitySourceMissing,
-)
-from .outcomes import (
+from .assertion_outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionKind,
     AssertionOutcome,
     AssertionPassed,
+)
+from .inconclusive_reasons import (
+    DOMSnapshotUnavailable,
+    InconclusiveReason,
+    ObservabilityLogMalformed,
+    ObservabilitySourceMissing,
 )
 
 __all__ = [
