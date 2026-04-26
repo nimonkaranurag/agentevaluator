@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from evaluate_agent.common.types import StrictFrozen
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     HttpUrl,
     StringConstraints,
@@ -34,11 +33,7 @@ Identifier = Annotated[
 ]
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class BearerAuth(_Strict):
+class BearerAuth(StrictFrozen):
     type: Literal["bearer"] = "bearer"
     token_env: Annotated[
         str,
@@ -49,7 +44,7 @@ class BearerAuth(_Strict):
     ]
 
 
-class BasicAuth(_Strict):
+class BasicAuth(StrictFrozen):
     type: Literal["basic"] = "basic"
     username_env: Annotated[
         str,
@@ -73,7 +68,7 @@ Auth = Annotated[
 ]
 
 
-class WebAccess(_Strict):
+class WebAccess(StrictFrozen):
     url: Annotated[
         HttpUrl,
         Field(
@@ -83,7 +78,7 @@ class WebAccess(_Strict):
     auth: Auth | None = None
 
 
-class LangfuseSource(_Strict):
+class LangfuseSource(StrictFrozen):
     host: HttpUrl
     public_key_env: str = Field(
         default="LANGFUSE_PUBLIC_KEY", min_length=1
@@ -93,19 +88,19 @@ class LangfuseSource(_Strict):
     )
 
 
-class OtelSource(_Strict):
+class OtelSource(StrictFrozen):
     endpoint: HttpUrl
     headers_env: str | None = Field(
         default=None, min_length=1
     )
 
 
-class Observability(_Strict):
+class Observability(StrictFrozen):
     langfuse: LangfuseSource | None = None
     otel: OtelSource | None = None
 
 
-class InteractionConfig(_Strict):
+class InteractionConfig(StrictFrozen):
     input_selector: Annotated[
         str | None,
         Field(
@@ -138,7 +133,7 @@ class InteractionConfig(_Strict):
     ]
 
 
-class Assertions(_Strict):
+class Assertions(StrictFrozen):
     must_call: list[Identifier] = Field(
         default_factory=list
     )
@@ -165,7 +160,7 @@ class Assertions(_Strict):
         return self
 
 
-class Case(_Strict):
+class Case(StrictFrozen):
     id: Slug
     input: Annotated[str, Field(min_length=1)]
     assertions: Assertions = Field(
@@ -173,7 +168,7 @@ class Case(_Strict):
     )
 
 
-class AgentManifest(_Strict):
+class AgentManifest(StrictFrozen):
     name: Slug
     description: str | None = Field(
         default=None, min_length=1, max_length=500

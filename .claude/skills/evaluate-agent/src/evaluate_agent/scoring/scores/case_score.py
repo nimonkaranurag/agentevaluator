@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
+from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.schema import Case, Slug
 from evaluate_agent.scoring.evaluators import (
     evaluate_final_response_contains,
@@ -18,18 +19,10 @@ from evaluate_agent.scoring.evaluators import (
 from evaluate_agent.scoring.outcomes import (
     AssertionOutcome,
 )
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
+from pydantic import Field
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class CaseScore(_Strict):
+class CaseScore(StrictFrozen):
     case_id: Annotated[
         Slug,
         Field(

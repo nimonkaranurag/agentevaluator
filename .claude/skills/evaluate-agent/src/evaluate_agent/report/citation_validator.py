@@ -7,27 +7,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
-
-from ..scoring import (
+from evaluate_agent.common.types import StrictFrozen
+from evaluate_agent.scoring import (
     AgentScore,
     AssertionFailed,
     AssertionPassed,
     CaseScore,
 )
+from pydantic import Field
 
 CitedArtifactKind = Literal["file", "directory"]
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class CitationValidationFailure(_Strict):
+class CitationValidationFailure(StrictFrozen):
     score_path: Annotated[
         str,
         Field(
@@ -61,7 +53,7 @@ class CitationValidationFailure(_Strict):
     ]
 
 
-class CitationValidationResult(_Strict):
+class CitationValidationResult(StrictFrozen):
     failures: Annotated[
         tuple[CitationValidationFailure, ...],
         Field(

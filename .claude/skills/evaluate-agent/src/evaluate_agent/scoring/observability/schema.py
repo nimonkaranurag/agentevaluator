@@ -6,20 +6,15 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
+from evaluate_agent.common.types import StrictFrozen
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     NonNegativeInt,
     model_validator,
 )
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class ToolCall(_Strict):
+class ToolCall(StrictFrozen):
     tool_name: Annotated[
         str,
         Field(
@@ -82,7 +77,7 @@ class ToolCall(_Strict):
     ]
 
 
-class RoutingDecision(_Strict):
+class RoutingDecision(StrictFrozen):
     target_agent: Annotated[
         str,
         Field(
@@ -150,7 +145,7 @@ class RoutingDecision(_Strict):
     ]
 
 
-class StepCount(_Strict):
+class StepCount(StrictFrozen):
     total_steps: Annotated[
         NonNegativeInt,
         Field(

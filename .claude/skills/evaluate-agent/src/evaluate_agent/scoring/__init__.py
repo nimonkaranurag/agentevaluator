@@ -1,101 +1,34 @@
 """
 Score captured cases against their declared assertions.
+
+The public surface is intentionally narrow: composers (score_case,
+score_agent) and the two top-level records (CaseScore, AgentScore)
+plus the discriminated assertion-outcome variants. Internal types
+(rollups, evaluator predicates, resolvers, observability schemas,
+inconclusive reasons) are addressable by their full sub-package
+path; consumers should reach for them there.
 """
 
-from .evaluators import (
-    evaluate_final_response_contains,
-    evaluate_max_steps,
-    evaluate_must_call,
-    evaluate_must_not_call,
-    evaluate_must_route_to,
-)
-from .observability import (
-    ObservabilityLogMalformedError,
-    RoutingDecision,
-    StepCount,
-    ToolCall,
-)
 from .outcomes import (
-    AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
-    AssertionKind,
     AssertionOutcome,
     AssertionPassed,
-    DOMSnapshotUnavailable,
-    InconclusiveReason,
-    ObservabilityLogMalformed,
-    ObservabilitySourceMissing,
-)
-from .resolvers import (
-    ResolvedDOMSnapshot,
-    ResolvedRoutingDecisionLog,
-    ResolvedStepCount,
-    ResolvedToolCallLog,
-    extract_visible_text,
-    post_submit_dom_snapshot_dir,
-    resolve_post_submit_dom_snapshot,
-    resolve_routing_decision_log,
-    resolve_step_count,
-    resolve_tool_call_log,
-    routing_decision_log_path,
-    step_count_path,
-    tool_call_log_path,
 )
 from .scores import (
-    ASSERTION_KIND_SCHEMA_ORDER,
-    AgentRollup,
     AgentScore,
-    AssertionKindRollup,
-    AssertionTargetRollup,
-    CaseOutcomeRollup,
     CaseScore,
-    TargetedAssertionKind,
     score_agent,
     score_case,
 )
 
 __all__ = [
-    "ASSERTION_KIND_SCHEMA_ORDER",
-    "AgentRollup",
     "AgentScore",
-    "AssertionEvidence",
     "AssertionFailed",
     "AssertionInconclusive",
-    "AssertionKind",
-    "AssertionKindRollup",
     "AssertionOutcome",
     "AssertionPassed",
-    "AssertionTargetRollup",
-    "CaseOutcomeRollup",
     "CaseScore",
-    "DOMSnapshotUnavailable",
-    "InconclusiveReason",
-    "ObservabilityLogMalformed",
-    "ObservabilityLogMalformedError",
-    "ObservabilitySourceMissing",
-    "ResolvedDOMSnapshot",
-    "ResolvedRoutingDecisionLog",
-    "ResolvedStepCount",
-    "ResolvedToolCallLog",
-    "RoutingDecision",
-    "StepCount",
-    "TargetedAssertionKind",
-    "ToolCall",
-    "evaluate_final_response_contains",
-    "evaluate_max_steps",
-    "evaluate_must_call",
-    "evaluate_must_not_call",
-    "evaluate_must_route_to",
-    "extract_visible_text",
-    "post_submit_dom_snapshot_dir",
-    "resolve_post_submit_dom_snapshot",
-    "resolve_routing_decision_log",
-    "resolve_step_count",
-    "resolve_tool_call_log",
-    "routing_decision_log_path",
     "score_agent",
     "score_case",
-    "step_count_path",
-    "tool_call_log_path",
 ]

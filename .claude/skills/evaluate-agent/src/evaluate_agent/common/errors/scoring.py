@@ -1,5 +1,5 @@
 """
-Typed errors raised when an observability log file is present but unparseable.
+Typed errors raised by the scoring layer.
 """
 
 from __future__ import annotations

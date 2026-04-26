@@ -2,18 +2,19 @@
 Agent manifest: schema, loader, discovery, and typed errors.
 """
 
-from .discovery import (
-    DiscoveredManifest,
-    DiscoveryFailure,
-    DiscoveryOutcome,
-    discover_manifests,
-)
-from .errors import (
+from evaluate_agent.common.errors.manifest import (
     ManifestDiscoveryRootError,
     ManifestError,
     ManifestNotFoundError,
     ManifestSyntaxError,
     ManifestValidationError,
+)
+
+from .discovery import (
+    DiscoveredManifest,
+    DiscoveryFailure,
+    DiscoveryOutcome,
+    discover_manifests,
 )
 from .loader import load_manifest
 from .schema import AgentManifest, InteractionConfig

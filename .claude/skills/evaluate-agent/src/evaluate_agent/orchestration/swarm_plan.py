@@ -1,5 +1,5 @@
 """
-Expand a validated manifest into a deterministic per-case fan-out plan.
+SwarmPlan record + plan_swarm composer.
 """
 
 from __future__ import annotations
@@ -9,115 +9,35 @@ from pathlib import Path
 from typing import Annotated
 
 from evaluate_agent.artifact_layout import (
-    RUN_ID_FORMAT,
     RunArtifactLayout,
+    parse_run_id,
 )
+from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.schema import (
     AgentManifest,
     Slug,
 )
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    ConfigDict,
-    Field,
-)
+from pydantic import AfterValidator, Field
+
+from .driver_invocation import DriverInvocation
+from .swarm_entry import SwarmEntry
 
 _DEFAULT_DRIVER_SCRIPT = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "scripts"
     / "open_agent.py"
 )
 
 
-def _validate_run_id_format(value: str) -> str:
-    try:
-        datetime.strptime(value, RUN_ID_FORMAT)
-    except ValueError as exc:
-        raise ValueError(
-            f"run_id {value!r} is not formatted as "
-            f"YYYYMMDDTHHMMSSZ (UTC, e.g. "
-            f"20260425T173000Z)"
-        ) from exc
+def _run_id_validator(value: str) -> str:
+    parse_run_id(value)
     return value
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class DriverInvocation(_Strict):
-    script: Annotated[
-        Path,
-        Field(
-            description=(
-                "Absolute path to the driver script "
-                "that executes one case end-to-end. "
-                "The orchestrator dispatches a sub-agent "
-                "per entry and the sub-agent invokes "
-                "this script with the supplied arguments."
-            ),
-        ),
-    ]
-    arguments: Annotated[
-        tuple[str, ...],
-        Field(
-            min_length=1,
-            description=(
-                "Argv passed to the driver script. The "
-                "first element is the absolute manifest "
-                "path; the remaining elements select the "
-                "case, set --submit, and pin --runs-root "
-                "and --run-id so every sibling sub-agent "
-                "writes artifacts into the same run "
-                "directory."
-            ),
-        ),
-    ]
-
-
-class SwarmEntry(_Strict):
-    case_id: Annotated[
-        Slug,
-        Field(
-            description=(
-                "Case identifier copied from "
-                "manifest.cases[].id. Mirrors the case "
-                "the driver_invocation selects via "
-                "--case."
-            ),
-        ),
-    ]
-    case_dir: Annotated[
-        Path,
-        Field(
-            description=(
-                "Absolute path to the directory at "
-                "<runs_root>/<agent_name>/<run_id>/"
-                "<case_id> where the case's screenshots, "
-                "DOM snapshots, and trace artifacts are "
-                "written."
-            ),
-        ),
-    ]
-    driver_invocation: Annotated[
-        DriverInvocation,
-        Field(
-            description=(
-                "Self-contained invocation contract for "
-                "the sub-agent that drives this case. "
-                "The orchestrator hands the contract to "
-                "one Claude sub-agent per entry — no "
-                "shared state with siblings."
-            ),
-        ),
-    ]
-
-
-class SwarmPlan(_Strict):
+class SwarmPlan(StrictFrozen):
     run_id: Annotated[
         str,
-        AfterValidator(_validate_run_id_format),
+        AfterValidator(_run_id_validator),
         Field(
             description=(
                 "Shared run timestamp committed at plan "
@@ -216,9 +136,4 @@ def plan_swarm(
     )
 
 
-__all__ = [
-    "DriverInvocation",
-    "SwarmEntry",
-    "SwarmPlan",
-    "plan_swarm",
-]
+__all__ = ["SwarmPlan", "plan_swarm"]

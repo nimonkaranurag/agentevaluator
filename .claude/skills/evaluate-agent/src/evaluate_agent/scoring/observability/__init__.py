@@ -1,8 +1,7 @@
 """
-On-disk schema and typed parse-error for the observability log files.
+On-disk schemas for the observability log files.
 """
 
-from .errors import ObservabilityLogMalformedError
 from .schema import (
     RoutingDecision,
     StepCount,
@@ -10,7 +9,6 @@ from .schema import (
 )
 
 __all__ = [
-    "ObservabilityLogMalformedError",
     "RoutingDecision",
     "StepCount",
     "ToolCall",

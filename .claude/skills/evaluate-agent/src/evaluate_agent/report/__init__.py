@@ -2,13 +2,16 @@
 Render score records as citation-grounded Markdown narratives.
 """
 
+from evaluate_agent.common.errors.report import (
+    UnresolvedCitationError,
+)
+
 from .citation_validator import (
     CitationValidationFailure,
     CitationValidationResult,
     CitedArtifactKind,
     validate_citations,
 )
-from .errors import UnresolvedCitationError
 from .render_agent_score import (
     render_agent_score_markdown,
 )

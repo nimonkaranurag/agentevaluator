@@ -7,10 +7,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .errors import (
+from evaluate_agent.common.errors.manifest import (
     ManifestDiscoveryRootError,
     ManifestError,
 )
+
 from .loader import load_manifest
 from .schema import AgentManifest
 

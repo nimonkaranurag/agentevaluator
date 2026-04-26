@@ -11,7 +11,7 @@ from typing import (
     TypeVar,
 )
 
-from evaluate_agent.scoring.observability.errors import (
+from evaluate_agent.common.errors.scoring import (
     ObservabilityLogMalformedError,
 )
 from evaluate_agent.scoring.outcomes import (

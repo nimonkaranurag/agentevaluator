@@ -4,21 +4,27 @@ Discriminated reasons an assertion outcome is inconclusive.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
+from evaluate_agent.common.types import StrictFrozen
+from pydantic import Field
+
+_SCHEMA_MODULE_PATH = Path(
+    importlib.util.find_spec(
+        "evaluate_agent.scoring.observability.schema"
+    ).origin
+).relative_to(
+    Path(
+        importlib.util.find_spec(
+            "evaluate_agent"
+        ).submodule_search_locations[0]
+    ).parents[1]
 )
 
 
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class DOMSnapshotUnavailable(_Strict):
+class DOMSnapshotUnavailable(StrictFrozen):
     kind: Literal["dom_snapshot_unavailable"] = (
         "dom_snapshot_unavailable"
     )
@@ -57,7 +63,7 @@ class DOMSnapshotUnavailable(_Strict):
     ]
 
 
-class ObservabilitySourceMissing(_Strict):
+class ObservabilitySourceMissing(StrictFrozen):
     kind: Literal["observability_source_missing"] = (
         "observability_source_missing"
     )
@@ -116,7 +122,7 @@ class ObservabilitySourceMissing(_Strict):
     ]
 
 
-class ObservabilityLogMalformed(_Strict):
+class ObservabilityLogMalformed(StrictFrozen):
     kind: Literal["observability_log_malformed"] = (
         "observability_log_malformed"
     )
@@ -164,20 +170,19 @@ class ObservabilityLogMalformed(_Strict):
         str,
         Field(
             default=(
-                "To proceed: open the log file at "
-                "log_path, locate the offending entry "
-                "(line_number when set, otherwise the "
-                "whole document), and correct it to "
-                "validate against the on-disk schema "
-                "in src/evaluate_agent/scoring/"
-                "observability/schema.py. Required "
-                "fields: tool_name + span_id "
-                "(tool_calls.jsonl); target_agent + "
-                "span_id (routing_decisions.jsonl); "
-                "total_steps + step_span_ids of "
-                "matching length (step_count.json). "
-                "Re-score the case once the file "
-                "validates."
+                f"To proceed: open the log file at "
+                f"log_path, locate the offending entry "
+                f"(line_number when set, otherwise the "
+                f"whole document), and correct it to "
+                f"validate against the on-disk schema "
+                f"in {_SCHEMA_MODULE_PATH}. Required "
+                f"fields: tool_name + span_id "
+                f"(tool_calls.jsonl); target_agent + "
+                f"span_id (routing_decisions.jsonl); "
+                f"total_steps + step_span_ids of "
+                f"matching length (step_count.json). "
+                f"Re-score the case once the file "
+                f"validates."
             ),
             min_length=1,
             description=(

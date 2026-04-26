@@ -7,18 +7,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
+from evaluate_agent.common.types import StrictFrozen
+from pydantic import Field
 
 from .inconclusive_reasons import InconclusiveReason
-
-
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
 
 AssertionKind = Literal[
     "final_response_contains",
@@ -29,7 +21,7 @@ AssertionKind = Literal[
 ]
 
 
-class AssertionEvidence(_Strict):
+class AssertionEvidence(StrictFrozen):
     artifact_path: Annotated[
         Path,
         Field(
@@ -57,7 +49,7 @@ class AssertionEvidence(_Strict):
     ]
 
 
-class AssertionPassed(_Strict):
+class AssertionPassed(StrictFrozen):
     outcome: Literal["passed"] = "passed"
     assertion_kind: Annotated[
         AssertionKind,
@@ -97,7 +89,7 @@ class AssertionPassed(_Strict):
     ]
 
 
-class AssertionFailed(_Strict):
+class AssertionFailed(StrictFrozen):
     outcome: Literal["failed"] = "failed"
     assertion_kind: Annotated[
         AssertionKind,
@@ -160,7 +152,7 @@ class AssertionFailed(_Strict):
     ]
 
 
-class AssertionInconclusive(_Strict):
+class AssertionInconclusive(StrictFrozen):
     outcome: Literal["inconclusive"] = "inconclusive"
     assertion_kind: Annotated[
         AssertionKind,
