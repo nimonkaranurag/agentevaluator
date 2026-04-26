@@ -38,10 +38,12 @@ from evaluate_agent.capture_labels import (  # noqa: E402
     POST_SUBMIT_LABEL,
 )
 from evaluate_agent.driver import (  # noqa: E402
-    Capture,
+    NAVIGATED_EVENT_SUFFIX,
+    PAGE_ERROR_EVENT_SUFFIX,
     DOMSnapshotter,
     InputElementNotFound,
     MissingAuthEnvVar,
+    Screenshotter,
     open_session,
     submit_case_input,
 )
@@ -110,6 +112,31 @@ def _parse_args(
     return parser.parse_args(argv)
 
 
+def _list_event_artifacts(
+    artifact_dir: Path,
+    event_suffix: str,
+    extension: str,
+) -> list[Path]:
+    if not artifact_dir.is_dir():
+        return []
+    return sorted(
+        artifact_dir.glob(
+            f"auto-*-{event_suffix}.{extension}"
+        )
+    )
+
+
+def _render_event_section(
+    label: str, artifacts: list[Path]
+) -> list[str]:
+    header = f"  {label + ':':<26}{len(artifacts)} captured"
+    rows = [
+        f"  {label}[{index}]: {path}"
+        for index, path in enumerate(artifacts, start=1)
+    ]
+    return [header, *rows]
+
+
 async def _drive(
     args: argparse.Namespace,
 ) -> int:
@@ -152,7 +179,9 @@ async def _drive(
     except InvalidRunId as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    capture = Capture(layout=layout, case_id=case.id)
+    screenshotter = Screenshotter(
+        layout=layout, case_id=case.id
+    )
     dom_snapshotter = DOMSnapshotter(
         layout=layout, case_id=case.id
     )
@@ -167,7 +196,7 @@ async def _drive(
             case_id=case.id,
             headless=not args.headed,
         ) as session:
-            landing = await capture.screenshot(
+            landing = await screenshotter.screenshot(
                 session.page, LANDING_LABEL
             )
             landing_dom = await dom_snapshotter.snapshot(
@@ -181,8 +210,10 @@ async def _drive(
                     input_selector=manifest.interaction.input_selector,
                     response_wait_ms=manifest.interaction.response_wait_ms,
                 )
-                after_submit = await capture.screenshot(
-                    session.page, POST_SUBMIT_LABEL
+                after_submit = (
+                    await screenshotter.screenshot(
+                        session.page, POST_SUBMIT_LABEL
+                    )
                 )
                 after_submit_dom = (
                     await dom_snapshotter.snapshot(
@@ -224,15 +255,17 @@ async def _drive(
                 f"  after_submit_dom:         {submission['dom_snapshot']}",
             ]
         )
-    auto_dom_snapshots = (
-        sorted(auto_dom_dir.glob("auto-*.html"))
-        if auto_dom_dir.is_dir()
-        else []
+    nav_dom_snapshots = _list_event_artifacts(
+        auto_dom_dir, NAVIGATED_EVENT_SUFFIX, "html"
     )
-    auto_screenshots = (
-        sorted(case_dir.glob("auto-*.png"))
-        if case_dir.is_dir()
-        else []
+    page_error_dom_snapshots = _list_event_artifacts(
+        auto_dom_dir, PAGE_ERROR_EVENT_SUFFIX, "html"
+    )
+    nav_screenshots = _list_event_artifacts(
+        case_dir, NAVIGATED_EVENT_SUFFIX, "png"
+    )
+    page_error_screenshots = _list_event_artifacts(
+        case_dir, PAGE_ERROR_EVENT_SUFFIX, "png"
     )
     lines.extend(
         [
@@ -242,22 +275,30 @@ async def _drive(
             f"  trace_responses:          {trace_paths.responses_path}",
             f"  trace_console:            {trace_paths.console_path}",
             f"  trace_page_errors:        {trace_paths.page_errors_path}",
-            f"  auto_dom_snapshots:       {len(auto_dom_snapshots)} captured",
         ]
     )
-    for index, path in enumerate(
-        auto_dom_snapshots, start=1
-    ):
-        lines.append(
-            f"  auto_dom_snapshot[{index}]:     {path}"
+    lines.extend(
+        _render_event_section(
+            "nav_dom_snapshots", nav_dom_snapshots
         )
-    lines.append(
-        f"  auto_screenshots:         {len(auto_screenshots)} captured"
     )
-    for index, path in enumerate(auto_screenshots, start=1):
-        lines.append(
-            f"  auto_screenshot[{index}]:       {path}"
+    lines.extend(
+        _render_event_section(
+            "page_error_dom_snapshots",
+            page_error_dom_snapshots,
         )
+    )
+    lines.extend(
+        _render_event_section(
+            "nav_screenshots", nav_screenshots
+        )
+    )
+    lines.extend(
+        _render_event_section(
+            "page_error_screenshots",
+            page_error_screenshots,
+        )
+    )
     print("\n".join(lines))
     return 0
 

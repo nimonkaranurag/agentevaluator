@@ -1,12 +1,8 @@
 """
-Playwright driver for live-agent evaluation.
+Snapshot-style evidence capture for the live driver session.
 """
 
-from .auth import (
-    MissingAuthEnvVar,
-    context_kwargs_for,
-)
-from .capture import (
+from .event_triggered import (
     NAVIGATED_EVENT,
     NAVIGATED_EVENT_SUFFIX,
     PAGE_ERROR_EVENT,
@@ -15,30 +11,21 @@ from .capture import (
     AutoDOMSnapshotCollectorAlreadyAttached,
     AutoScreenshotCollector,
     AutoScreenshotCollectorAlreadyAttached,
-    DOMSnapshotable,
-    DOMSnapshotter,
     EventTriggeredCaptureCollector,
     EventTriggeredCapturePage,
-    InvalidDOMSnapshotLabel,
-    InvalidScreenshotLabel,
     NavigatedFrame,
     PageErrorDOMSnapshotCollector,
     PageErrorDOMSnapshotCollectorAlreadyAttached,
     PageErrorScreenshotCollector,
     PageErrorScreenshotCollectorAlreadyAttached,
+)
+from .explicit import (
+    DOMSnapshotable,
+    DOMSnapshotter,
+    InvalidDOMSnapshotLabel,
+    InvalidScreenshotLabel,
     Screenshotable,
     Screenshotter,
-)
-from .interact import (
-    InputElementNotFound,
-    submit_case_input,
-)
-from .session import Session, open_session
-from .trace import (
-    PageEventEmitter,
-    TraceCollector,
-    TraceCollectorAlreadyAttached,
-    collect_trace,
 )
 
 __all__ = [
@@ -50,10 +37,8 @@ __all__ = [
     "DOMSnapshotter",
     "EventTriggeredCaptureCollector",
     "EventTriggeredCapturePage",
-    "InputElementNotFound",
     "InvalidDOMSnapshotLabel",
     "InvalidScreenshotLabel",
-    "MissingAuthEnvVar",
     "NAVIGATED_EVENT",
     "NAVIGATED_EVENT_SUFFIX",
     "NavigatedFrame",
@@ -63,14 +48,6 @@ __all__ = [
     "PageErrorDOMSnapshotCollectorAlreadyAttached",
     "PageErrorScreenshotCollector",
     "PageErrorScreenshotCollectorAlreadyAttached",
-    "PageEventEmitter",
     "Screenshotable",
     "Screenshotter",
-    "Session",
-    "TraceCollector",
-    "TraceCollectorAlreadyAttached",
-    "collect_trace",
-    "context_kwargs_for",
-    "open_session",
-    "submit_case_input",
 ]
