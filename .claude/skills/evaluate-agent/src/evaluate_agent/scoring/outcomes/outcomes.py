@@ -26,6 +26,7 @@ AssertionKind = Literal[
     "must_not_call",
     "must_route_to",
     "max_steps",
+    "no_uncaught_page_errors",
 ]
 
 

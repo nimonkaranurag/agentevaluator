@@ -150,6 +150,26 @@ class Assertions(_Strict):
     final_response_contains: str | None = Field(
         default=None, min_length=1
     )
+    no_uncaught_page_errors: Annotated[
+        Literal[True] | None,
+        Field(
+            default=None,
+            description=(
+                "Set to true to assert that no "
+                "uncaught JavaScript page errors fired "
+                "during the run. Resolved against the "
+                "always-on baseline trace log at "
+                "<case_dir>/trace/page_errors.jsonl — "
+                "passes when the log is empty, fails "
+                "on the first recorded error citing "
+                "its message and timestamp. Omit the "
+                "field when the assertion is not "
+                "wanted; false is rejected because the "
+                "inverse (assert errors did fire) is "
+                "not a useful contract."
+            ),
+        ),
+    ]
 
     @model_validator(mode="after")
     def _must_and_must_not_are_disjoint(

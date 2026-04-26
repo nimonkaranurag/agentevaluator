@@ -91,6 +91,15 @@ class TestAssertionPassed:
         with pytest.raises(ValidationError):
             self._build(assertion_kind="not_a_real_kind")
 
+    def test_no_uncaught_page_errors_kind_accepted(self):
+        passed = self._build(
+            assertion_kind="no_uncaught_page_errors"
+        )
+        assert (
+            passed.assertion_kind
+            == "no_uncaught_page_errors"
+        )
+
     def test_target_optional(self):
         passed = self._build()
         assert passed.target is None

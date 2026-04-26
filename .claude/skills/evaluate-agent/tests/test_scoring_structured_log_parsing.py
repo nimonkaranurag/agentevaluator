@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 from evaluate_agent.scoring import (
-    ObservabilityLogMalformedError,
     StepCount,
+    StructuredLogParseError,
     ToolCall,
     parse_jsonl_log,
     parse_single_json_log,
@@ -73,9 +73,7 @@ class TestParseJsonlLog:
             "not-json-at-all\n",
             encoding="utf-8",
         )
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             parse_jsonl_log(target, ToolCall)
         assert info.value.line_number == 2
         assert info.value.path == target
@@ -90,9 +88,7 @@ class TestParseJsonlLog:
             '{"tool_name": "missing_span"}\n',
             encoding="utf-8",
         )
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             parse_jsonl_log(target, ToolCall)
         assert info.value.line_number == 2
         assert "schema violation" in info.value.parse_error
@@ -105,9 +101,7 @@ class TestParseJsonlLog:
         target.write_text(
             "broken-first-line\n", encoding="utf-8"
         )
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             parse_jsonl_log(target, ToolCall)
         assert info.value.line_number == 1
 
@@ -133,9 +127,7 @@ class TestParseSingleJsonLog:
     ):
         target = tmp_path / "bad.json"
         target.write_text("{nope", encoding="utf-8")
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             parse_single_json_log(target, StepCount)
         assert info.value.line_number is None
         assert info.value.path == target
@@ -154,9 +146,7 @@ class TestParseSingleJsonLog:
             ),
             encoding="utf-8",
         )
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             parse_single_json_log(target, StepCount)
         assert info.value.line_number is None
         assert "schema violation" in info.value.parse_error

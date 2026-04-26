@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 from evaluate_agent.scoring import (
-    ObservabilityLogMalformedError,
     ResolvedRoutingDecisionLog,
     ResolvedStepCount,
     ResolvedToolCallLog,
+    StructuredLogParseError,
     resolve_routing_decision_log,
     resolve_step_count,
     resolve_tool_call_log,
@@ -111,9 +111,7 @@ class TestResolveToolCallLog:
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("not-json\n", encoding="utf-8")
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             resolve_tool_call_log(tmp_path)
         assert info.value.path == target
 
@@ -123,7 +121,7 @@ class TestResolveToolCallLog:
             "tool_calls.jsonl",
             [{"tool_name": "search"}],
         )
-        with pytest.raises(ObservabilityLogMalformedError):
+        with pytest.raises(StructuredLogParseError):
             resolve_tool_call_log(tmp_path)
 
 
@@ -167,7 +165,7 @@ class TestResolveRoutingDecisionLog:
             '{"target_agent": "ok"}\n',
             encoding="utf-8",
         )
-        with pytest.raises(ObservabilityLogMalformedError):
+        with pytest.raises(StructuredLogParseError):
             resolve_routing_decision_log(tmp_path)
 
 
@@ -202,7 +200,7 @@ class TestResolveStepCount:
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("{nope", encoding="utf-8")
-        with pytest.raises(ObservabilityLogMalformedError):
+        with pytest.raises(StructuredLogParseError):
             resolve_step_count(tmp_path)
 
     def test_raises_on_length_mismatch(self, tmp_path):
@@ -213,9 +211,7 @@ class TestResolveStepCount:
                 "step_span_ids": ["just_one"],
             },
         )
-        with pytest.raises(
-            ObservabilityLogMalformedError
-        ) as info:
+        with pytest.raises(StructuredLogParseError) as info:
             resolve_step_count(tmp_path)
         assert info.value.line_number is None
 

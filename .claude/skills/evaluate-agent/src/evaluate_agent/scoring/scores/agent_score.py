@@ -36,6 +36,7 @@ ASSERTION_KIND_SCHEMA_ORDER: tuple[AssertionKind, ...] = (
     "must_not_call",
     "must_route_to",
     "max_steps",
+    "no_uncaught_page_errors",
 )
 
 _TARGETED_ASSERTION_KINDS: frozenset[AssertionKind] = (

@@ -12,11 +12,11 @@ from evaluate_agent.artifact_layout import (
     ROUTING_DECISION_LOG_FILENAME,
     TRACE_SUBDIR,
 )
-from evaluate_agent.scoring.observability.parsing import (
-    parse_jsonl_log,
-)
 from evaluate_agent.scoring.observability.schema import (
     RoutingDecision,
+)
+from evaluate_agent.scoring.structured_log_parsing import (
+    parse_jsonl_log,
 )
 
 
