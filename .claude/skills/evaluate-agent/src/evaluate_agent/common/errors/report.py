@@ -4,7 +4,7 @@ Typed errors raised by the report renderer.
 
 from __future__ import annotations
 
-from evaluate_agent.report.citation_validator import (
+from evaluate_agent.report.common.citation_validator import (
     CitationValidationFailure,
 )
 

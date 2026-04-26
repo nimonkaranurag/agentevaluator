@@ -19,7 +19,9 @@ from evaluate_agent.scoring.outcomes import (
     ObservabilitySourceMissing,
 )
 
-from .citation_validator import validate_citations
+from evaluate_agent.report.common.citation_validator import (
+    validate_citations,
+)
 
 
 def render_case_score_markdown(
