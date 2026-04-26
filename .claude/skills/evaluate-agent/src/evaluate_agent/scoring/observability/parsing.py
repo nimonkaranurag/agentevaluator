@@ -1,5 +1,5 @@
 """
-Parse structured log files into typed entry models.
+Parse observability log files into typed entry models.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from .errors import StructuredLogParseError
+from .errors import ObservabilityLogMalformedError
 
 _Entry = TypeVar("_Entry", bound=BaseModel)
 
@@ -30,7 +30,7 @@ def parse_jsonl_log(
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError as exc:
-                raise StructuredLogParseError(
+                raise ObservabilityLogMalformedError(
                     path=path,
                     line_number=line_number,
                     parse_error=(
@@ -42,7 +42,7 @@ def parse_jsonl_log(
                     entry_model_cls.model_validate(obj)
                 )
             except ValidationError as exc:
-                raise StructuredLogParseError(
+                raise ObservabilityLogMalformedError(
                     path=path,
                     line_number=line_number,
                     parse_error=(
@@ -62,7 +62,7 @@ def parse_single_json_log(
     try:
         obj = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise StructuredLogParseError(
+        raise ObservabilityLogMalformedError(
             path=path,
             line_number=None,
             parse_error=f"invalid JSON ({exc.msg})",
@@ -70,7 +70,7 @@ def parse_single_json_log(
     try:
         return model_cls.model_validate(obj)
     except ValidationError as exc:
-        raise StructuredLogParseError(
+        raise ObservabilityLogMalformedError(
             path=path,
             line_number=None,
             parse_error=(

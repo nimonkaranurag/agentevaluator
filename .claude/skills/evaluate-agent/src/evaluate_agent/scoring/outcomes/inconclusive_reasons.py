@@ -7,8 +7,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from evaluate_agent.scoring.structured_log_parsing import (
-    StructuredLogParseError,
+from evaluate_agent.scoring.observability.errors import (
+    ObservabilityLogMalformedError,
 )
 from pydantic import (
     BaseModel,
@@ -194,152 +194,8 @@ class ObservabilityLogMalformed(_Strict):
     @classmethod
     def from_error(
         cls,
-        error: StructuredLogParseError,
+        error: ObservabilityLogMalformedError,
     ) -> "ObservabilityLogMalformed":
-        return cls(
-            log_path=error.path,
-            line_number=error.line_number,
-            parse_error=error.parse_error,
-        )
-
-
-class BaselineTraceArtifactMissing(_Strict):
-    kind: Literal["baseline_trace_artifact_missing"] = (
-        "baseline_trace_artifact_missing"
-    )
-    needed_artifact: Annotated[
-        Literal["page_errors_log"],
-        Field(
-            description=(
-                "Class of always-on baseline-trace "
-                "evidence the assertion requires. "
-                "Baseline-trace artifacts are written "
-                "by the driver's TraceCollector on "
-                "every session and do not require "
-                "manifest configuration; an absent "
-                "artifact means the case was never "
-                "driven (no open_agent.py invocation) "
-                "or the driver crashed before the "
-                "trace baseline was opened."
-            ),
-        ),
-    ]
-    expected_artifact_path: Annotated[
-        Path,
-        Field(
-            description=(
-                "Absolute path under which the baseline "
-                "trace log resolves once the case is "
-                "driven. Cited verbatim in the recovery "
-                "procedure so the caller knows the path "
-                "the missing log occupies."
-            ),
-        ),
-    ]
-    recovery: Annotated[
-        str,
-        Field(
-            default=(
-                "To proceed: re-run the case via "
-                "open_agent.py (the trace baseline is "
-                "always-on and writes the log "
-                "automatically). If the driver did "
-                "raise during the run, address the "
-                "underlying error first — the log is "
-                "opened before the agent under "
-                "evaluation is reached, so a baseline "
-                "trace artifact missing on disk "
-                "indicates the driver did not start "
-                "session capture at all. Re-score the "
-                "case once the artifact lands at the "
-                "expected_artifact_path."
-            ),
-            min_length=1,
-            description=(
-                "Numbered next steps the caller follows "
-                "to make the assertion evaluable."
-            ),
-        ),
-    ]
-
-
-class BaselineTraceLogMalformed(_Strict):
-    kind: Literal["baseline_trace_log_malformed"] = (
-        "baseline_trace_log_malformed"
-    )
-    log_path: Annotated[
-        Path,
-        Field(
-            description=(
-                "Absolute path to the baseline-trace log "
-                "file that was present on disk but "
-                "could not be parsed. Cited verbatim so "
-                "the caller can open the file and "
-                "inspect the offending entry."
-            ),
-        ),
-    ]
-    line_number: Annotated[
-        int | None,
-        Field(
-            default=None,
-            ge=1,
-            description=(
-                "1-based line number of the offending "
-                "entry inside the log. None when the "
-                "failure applies to the document as a "
-                "whole rather than a specific line."
-            ),
-        ),
-    ]
-    parse_error: Annotated[
-        str,
-        Field(
-            min_length=1,
-            description=(
-                "Underlying parse-error message — "
-                "either a JSON syntax error or a "
-                "schema-validation summary. Cited "
-                "verbatim so the caller can correct "
-                "the offending entry without re-running "
-                "the scoring layer."
-            ),
-        ),
-    ]
-    recovery: Annotated[
-        str,
-        Field(
-            default=(
-                "To proceed: open the log file at "
-                "log_path and correct the offending "
-                "entry (line_number when set, "
-                "otherwise the whole document) so it "
-                "validates against the on-disk schema "
-                "in src/evaluate_agent/scoring/"
-                "baseline_trace/schema.py. "
-                "Baseline-trace logs are written by "
-                "the driver's TraceCollector — a "
-                "malformed entry typically indicates "
-                "the file was edited by hand or "
-                "truncated mid-write; re-running the "
-                "case via open_agent.py overwrites "
-                "the file cleanly. Re-score the case "
-                "once the file validates."
-            ),
-            min_length=1,
-            description=(
-                "Numbered next steps the caller follows "
-                "to repair the malformed log so the "
-                "assertion becomes evaluable."
-            ),
-        ),
-    ]
-
-    @classmethod
-    def from_error(
-        cls,
-        error: StructuredLogParseError,
-    ) -> "BaselineTraceLogMalformed":
         return cls(
             log_path=error.path,
             line_number=error.line_number,
@@ -350,16 +206,12 @@ class BaselineTraceLogMalformed(_Strict):
 InconclusiveReason = Annotated[
     DOMSnapshotUnavailable
     | ObservabilitySourceMissing
-    | ObservabilityLogMalformed
-    | BaselineTraceArtifactMissing
-    | BaselineTraceLogMalformed,
+    | ObservabilityLogMalformed,
     Field(discriminator="kind"),
 ]
 
 
 __all__ = [
-    "BaselineTraceArtifactMissing",
-    "BaselineTraceLogMalformed",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilityLogMalformed",

@@ -6,6 +6,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate_agent.scoring.observability.errors import (
+    ObservabilityLogMalformedError,
+)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
@@ -15,12 +18,9 @@ from evaluate_agent.scoring.outcomes import (
     ObservabilityLogMalformed,
     ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.observability.tool_call_log import (  # noqa: E501
+from evaluate_agent.scoring.resolvers.tool_call_log import (
     resolve_tool_call_log,
     tool_call_log_path,
-)
-from evaluate_agent.scoring.structured_log_parsing import (
-    StructuredLogParseError,
 )
 
 
@@ -30,7 +30,7 @@ def evaluate_must_call(
 ) -> AssertionOutcome:
     try:
         log = resolve_tool_call_log(case_dir)
-    except StructuredLogParseError as exc:
+    except ObservabilityLogMalformedError as exc:
         return AssertionInconclusive(
             assertion_kind="must_call",
             target=tool_name,

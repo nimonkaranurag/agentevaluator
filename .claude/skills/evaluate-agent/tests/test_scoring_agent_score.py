@@ -661,7 +661,6 @@ class TestComposeRollupByAssertionKind:
                 _obs_missing("must_call", "search"),
                 _obs_missing("must_not_call", "danger"),
                 _passed("final_response_contains"),
-                _passed("no_uncaught_page_errors"),
             )
         )
         assert tuple(
@@ -673,54 +672,7 @@ class TestComposeRollupByAssertionKind:
             "must_not_call",
             "must_route_to",
             "max_steps",
-            "no_uncaught_page_errors",
         )
-
-    def test_no_uncaught_page_errors_aggregates_across_cases(
-        self,
-    ) -> None:
-        score = _compose(
-            _case(
-                "alpha",
-                _passed("no_uncaught_page_errors"),
-            ),
-            _case(
-                "beta",
-                _failed(
-                    "no_uncaught_page_errors",
-                    expected="zero uncaught",
-                    observed="TypeError: x",
-                ),
-            ),
-            _case(
-                "gamma",
-                _passed("no_uncaught_page_errors"),
-            ),
-        )
-        (row,) = (
-            r
-            for r in score.rollup.by_assertion_kind
-            if r.assertion_kind == "no_uncaught_page_errors"
-        )
-        assert row.total == 3
-        assert row.passed == 2
-        assert row.failed == 1
-        assert row.inconclusive == 0
-
-    def test_no_uncaught_page_errors_omitted_from_by_target(
-        self,
-    ) -> None:
-        score = _compose(
-            _case(
-                "alpha",
-                _passed("no_uncaught_page_errors"),
-            )
-        )
-        target_kinds = tuple(
-            row.assertion_kind
-            for row in score.rollup.by_target
-        )
-        assert "no_uncaught_page_errors" not in target_kinds
 
     def test_per_kind_outcome_counts(self) -> None:
         score = _compose(

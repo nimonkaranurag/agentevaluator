@@ -39,7 +39,6 @@ cases:
       must_route_to: booking_agent
       max_steps: 6
       final_response_contains: "confirmation number"
-      no_uncaught_page_errors: true
 
   - id: refund_past_booking
     input: "I need to refund my booking from last week, confirmation ABC123."
@@ -47,4 +46,3 @@ cases:
       must_call: [issue_refund]
       must_route_to: refund_agent
       max_steps: 4
-      no_uncaught_page_errors: true

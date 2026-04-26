@@ -9,9 +9,6 @@ from .max_steps import evaluate_max_steps
 from .must_call import evaluate_must_call
 from .must_not_call import evaluate_must_not_call
 from .must_route_to import evaluate_must_route_to
-from .no_uncaught_page_errors import (
-    evaluate_no_uncaught_page_errors,
-)
 
 __all__ = [
     "evaluate_final_response_contains",
@@ -19,5 +16,4 @@ __all__ = [
     "evaluate_must_call",
     "evaluate_must_not_call",
     "evaluate_must_route_to",
-    "evaluate_no_uncaught_page_errors",
 ]

@@ -1,7 +1,12 @@
 """
-On-disk schemas for the observability log files the evaluators consume.
+On-disk schema, parser, and error type for observability log files.
 """
 
+from .errors import ObservabilityLogMalformedError
+from .parsing import (
+    parse_jsonl_log,
+    parse_single_json_log,
+)
 from .schema import (
     RoutingDecision,
     StepCount,
@@ -9,7 +14,10 @@ from .schema import (
 )
 
 __all__ = [
+    "ObservabilityLogMalformedError",
     "RoutingDecision",
     "StepCount",
     "ToolCall",
+    "parse_jsonl_log",
+    "parse_single_json_log",
 ]
