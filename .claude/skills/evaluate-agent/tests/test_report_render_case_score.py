@@ -82,6 +82,10 @@ def _inconclusive_obs(
         target=target,
         reason=ObservabilitySourceMissing(
             needed_evidence=needed,
+            expected_artifact_path=Path(
+                "/tmp/case/trace/observability/"
+                f"{needed}.jsonl"
+            ),
         ),
     )
 

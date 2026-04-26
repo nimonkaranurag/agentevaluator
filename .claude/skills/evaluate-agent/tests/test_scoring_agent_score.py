@@ -70,6 +70,10 @@ def _obs_missing(
         target=target,
         reason=ObservabilitySourceMissing(
             needed_evidence=needed,
+            expected_artifact_path=Path(
+                "/tmp/agent_score/case_x/trace/"
+                f"observability/{needed}.jsonl"
+            ),
         ),
     )
 

@@ -7,16 +7,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from evaluate_agent.scoring.inconclusive_reasons import (
-    DOMSnapshotUnavailable,
-    ObservabilitySourceMissing,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
+    DOMSnapshotUnavailable,
+    ObservabilitySourceMissing,
 )
 from pydantic import (
     BaseModel,
@@ -186,6 +184,10 @@ class TestAssertionInconclusive:
             target="lookup_pix",
             reason=ObservabilitySourceMissing(
                 needed_evidence="tool_call_log",
+                expected_artifact_path=Path(
+                    "/tmp/case/trace/observability/"
+                    "tool_calls.jsonl"
+                ),
             ),
         )
         assert isinstance(
@@ -224,6 +226,10 @@ class TestDiscriminatedUnion:
             target="lookup_pix",
             reason=ObservabilitySourceMissing(
                 needed_evidence="tool_call_log",
+                expected_artifact_path=Path(
+                    "/tmp/case/trace/observability/"
+                    "tool_calls.jsonl"
+                ),
             ),
         )
 
@@ -282,6 +288,10 @@ class TestDiscriminatedUnion:
                         "observability_source_missing"
                     ),
                     "needed_evidence": "tool_call_log",
+                    "expected_artifact_path": (
+                        "/tmp/case/trace/observability/"
+                        "tool_calls.jsonl"
+                    ),
                 },
             }
         )

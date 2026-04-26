@@ -13,6 +13,10 @@ TRACE_SUBDIR = "trace"
 DOM_SNAPSHOTS_SUBDIR = "dom"
 DOM_SNAPSHOT_EXT = "html"
 EXPLICIT_DOM_PREFIX = "step"
+OBSERVABILITY_SUBDIR = "observability"
+TOOL_CALL_LOG_FILENAME = "tool_calls.jsonl"
+ROUTING_DECISION_LOG_FILENAME = "routing_decisions.jsonl"
+STEP_COUNT_FILENAME = "step_count.json"
 _HAR_FILENAME = "network.har"
 _REQUESTS_FILENAME = "requests.jsonl"
 _RESPONSES_FILENAME = "responses.jsonl"
@@ -167,12 +171,43 @@ class RunArtifactLayout:
         )
         return self.dom_snapshot_dir(case_id) / filename
 
+    def observability_log_dir(self, case_id: str) -> Path:
+        return (
+            self.case_dir(case_id)
+            / TRACE_SUBDIR
+            / OBSERVABILITY_SUBDIR
+        )
+
+    def tool_call_log_path(self, case_id: str) -> Path:
+        return (
+            self.observability_log_dir(case_id)
+            / TOOL_CALL_LOG_FILENAME
+        )
+
+    def routing_decision_log_path(
+        self, case_id: str
+    ) -> Path:
+        return (
+            self.observability_log_dir(case_id)
+            / ROUTING_DECISION_LOG_FILENAME
+        )
+
+    def step_count_path(self, case_id: str) -> Path:
+        return (
+            self.observability_log_dir(case_id)
+            / STEP_COUNT_FILENAME
+        )
+
 
 __all__ = [
     "DOM_SNAPSHOT_EXT",
     "DOM_SNAPSHOTS_SUBDIR",
     "EXPLICIT_DOM_PREFIX",
+    "OBSERVABILITY_SUBDIR",
+    "ROUTING_DECISION_LOG_FILENAME",
     "RUN_ID_FORMAT",
+    "STEP_COUNT_FILENAME",
+    "TOOL_CALL_LOG_FILENAME",
     "TRACE_SUBDIR",
     "InvalidRunId",
     "RunArtifactLayout",
