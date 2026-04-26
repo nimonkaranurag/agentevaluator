@@ -14,6 +14,7 @@ from evaluate_agent.scoring.evaluators import (
     evaluate_must_call,
     evaluate_must_not_call,
     evaluate_must_route_to,
+    evaluate_no_uncaught_page_errors,
 )
 from evaluate_agent.scoring.outcomes import (
     AssertionOutcome,
@@ -59,8 +60,9 @@ class CaseScore(_Strict):
                 "schema order: final_response_contains, "
                 "then must_call (per tool), then "
                 "must_not_call (per tool), then "
-                "must_route_to, then max_steps. Empty "
-                "when the case declares no assertions."
+                "must_route_to, then max_steps, then "
+                "no_uncaught_page_errors. Empty when "
+                "the case declares no assertions."
             ),
         ),
     ]
@@ -133,6 +135,13 @@ def score_case(
         outcomes.append(
             evaluate_max_steps(
                 assertions.max_steps,
+                case_dir=case_dir,
+            )
+        )
+
+    if assertions.no_uncaught_page_errors is not None:
+        outcomes.append(
+            evaluate_no_uncaught_page_errors(
                 case_dir=case_dir,
             )
         )

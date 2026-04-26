@@ -181,6 +181,75 @@ class TestPerAssertionDispatch:
             score.outcomes[0].assertion_kind == "max_steps"
         )
 
+    def test_no_uncaught_page_errors_emits_one_outcome(
+        self, tmp_path
+    ):
+        log = tmp_path / "trace" / "page_errors.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("", encoding="utf-8")
+        score = score_case(
+            case=_build_case(no_uncaught_page_errors=True),
+            case_dir=tmp_path,
+        )
+        assert len(score.outcomes) == 1
+        outcome = score.outcomes[0]
+        assert (
+            outcome.assertion_kind
+            == "no_uncaught_page_errors"
+        )
+        assert isinstance(outcome, AssertionPassed)
+
+    def test_no_uncaught_page_errors_failed_path(
+        self, tmp_path
+    ):
+        log = tmp_path / "trace" / "page_errors.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(
+            json.dumps(
+                {
+                    "ts": "2026-04-26T12:00:00.000+00:00",
+                    "message": "TypeError: x is null",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        score = score_case(
+            case=_build_case(no_uncaught_page_errors=True),
+            case_dir=tmp_path,
+        )
+        assert len(score.outcomes) == 1
+        outcome = score.outcomes[0]
+        assert isinstance(outcome, AssertionFailed)
+        assert (
+            outcome.assertion_kind
+            == "no_uncaught_page_errors"
+        )
+
+    def test_no_uncaught_page_errors_inconclusive_when_absent(
+        self, tmp_path
+    ):
+        score = score_case(
+            case=_build_case(no_uncaught_page_errors=True),
+            case_dir=tmp_path,
+        )
+        assert len(score.outcomes) == 1
+        assert isinstance(
+            score.outcomes[0], AssertionInconclusive
+        )
+
+    def test_no_uncaught_page_errors_omitted_emits_no_outcome(
+        self, tmp_path
+    ):
+        log = tmp_path / "trace" / "page_errors.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("", encoding="utf-8")
+        score = score_case(
+            case=_build_case(),
+            case_dir=tmp_path,
+        )
+        assert score.outcomes == ()
+
 
 class TestSchemaOrderPreserved:
     def test_outcomes_emitted_in_schema_order(
@@ -190,6 +259,9 @@ class TestSchemaOrderPreserved:
             tmp_path,
             "<html><body><p>done</p></body></html>",
         )
+        log = tmp_path / "trace" / "page_errors.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("", encoding="utf-8")
         score = score_case(
             case=_build_case(
                 final_response_contains="done",
@@ -197,6 +269,7 @@ class TestSchemaOrderPreserved:
                 must_not_call=["c"],
                 must_route_to="d",
                 max_steps=5,
+                no_uncaught_page_errors=True,
             ),
             case_dir=tmp_path,
         )
@@ -211,6 +284,7 @@ class TestSchemaOrderPreserved:
             "must_not_call",
             "must_route_to",
             "max_steps",
+            "no_uncaught_page_errors",
         ]
 
 

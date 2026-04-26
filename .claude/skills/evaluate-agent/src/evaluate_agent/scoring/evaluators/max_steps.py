@@ -6,9 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
@@ -18,9 +15,12 @@ from evaluate_agent.scoring.outcomes import (
     ObservabilityLogMalformed,
     ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.step_count import (
+from evaluate_agent.scoring.resolvers.observability.step_count import (  # noqa: E501
     resolve_step_count,
     step_count_path,
+)
+from evaluate_agent.scoring.structured_log_parsing import (
+    StructuredLogParseError,
 )
 
 
@@ -30,7 +30,7 @@ def evaluate_max_steps(
 ) -> AssertionOutcome:
     try:
         record = resolve_step_count(case_dir)
-    except ObservabilityLogMalformedError as exc:
+    except StructuredLogParseError as exc:
         return AssertionInconclusive(
             assertion_kind="max_steps",
             reason=ObservabilityLogMalformed.from_error(

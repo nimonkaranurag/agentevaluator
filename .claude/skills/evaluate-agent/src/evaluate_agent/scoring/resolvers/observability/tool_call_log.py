@@ -12,11 +12,11 @@ from evaluate_agent.artifact_layout import (
     TOOL_CALL_LOG_FILENAME,
     TRACE_SUBDIR,
 )
-from evaluate_agent.scoring.observability.parsing import (
-    parse_jsonl_log,
-)
 from evaluate_agent.scoring.observability.schema import (
     ToolCall,
+)
+from evaluate_agent.scoring.structured_log_parsing import (
+    parse_jsonl_log,
 )
 
 

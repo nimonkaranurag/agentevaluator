@@ -8,11 +8,13 @@ from pathlib import Path
 
 import pytest
 from evaluate_agent.scoring import (
+    BaselineTraceArtifactMissing,
+    BaselineTraceLogMalformed,
     DOMSnapshotUnavailable,
     InconclusiveReason,
     ObservabilityLogMalformed,
-    ObservabilityLogMalformedError,
     ObservabilitySourceMissing,
+    StructuredLogParseError,
 )
 from pydantic import (
     BaseModel,
@@ -185,7 +187,7 @@ class TestObservabilityLogMalformed:
             reason.parse_error = "different"  # type: ignore[misc]
 
     def test_from_error_classmethod_jsonl(self):
-        error = ObservabilityLogMalformedError(
+        error = StructuredLogParseError(
             path=Path(
                 "/tmp/case/trace/observability/"
                 "tool_calls.jsonl"
@@ -199,7 +201,7 @@ class TestObservabilityLogMalformed:
         assert reason.parse_error == "schema violation"
 
     def test_from_error_classmethod_single_json(self):
-        error = ObservabilityLogMalformedError(
+        error = StructuredLogParseError(
             path=Path(
                 "/tmp/case/trace/observability/"
                 "step_count.json"
@@ -305,3 +307,183 @@ class TestDiscriminatedUnion:
             _ReasonContainer.model_validate_json(text)
         )
         assert reconstituted == wrapper
+
+    def test_validate_baseline_artifact_missing_branch(
+        self,
+    ):
+        reason = _REASON_ADAPTER.validate_python(
+            {
+                "kind": "baseline_trace_artifact_missing",
+                "needed_artifact": "page_errors_log",
+                "expected_artifact_path": (
+                    "/tmp/case/trace/page_errors.jsonl"
+                ),
+            }
+        )
+        assert isinstance(
+            reason, BaselineTraceArtifactMissing
+        )
+
+    def test_validate_baseline_log_malformed_branch(self):
+        reason = _REASON_ADAPTER.validate_python(
+            {
+                "kind": "baseline_trace_log_malformed",
+                "log_path": (
+                    "/tmp/case/trace/page_errors.jsonl"
+                ),
+                "line_number": 2,
+                "parse_error": "invalid JSON",
+            }
+        )
+        assert isinstance(reason, BaselineTraceLogMalformed)
+
+    def test_round_trip_baseline_artifact_missing(self):
+        wrapper = _ReasonContainer(
+            item=BaselineTraceArtifactMissing(
+                needed_artifact="page_errors_log",
+                expected_artifact_path=Path(
+                    "/tmp/case/trace/page_errors.jsonl"
+                ),
+            ),
+        )
+        text = wrapper.model_dump_json()
+        reconstituted = (
+            _ReasonContainer.model_validate_json(text)
+        )
+        assert reconstituted == wrapper
+
+    def test_round_trip_baseline_log_malformed(self):
+        wrapper = _ReasonContainer(
+            item=BaselineTraceLogMalformed(
+                log_path=Path(
+                    "/tmp/case/trace/page_errors.jsonl"
+                ),
+                line_number=4,
+                parse_error="invalid JSON",
+            ),
+        )
+        text = wrapper.model_dump_json()
+        reconstituted = (
+            _ReasonContainer.model_validate_json(text)
+        )
+        assert reconstituted == wrapper
+
+
+class TestBaselineTraceArtifactMissing:
+    def _build(self, **overrides):
+        defaults = dict(
+            needed_artifact="page_errors_log",
+            expected_artifact_path=Path(
+                "/tmp/case/trace/page_errors.jsonl"
+            ),
+        )
+        defaults.update(overrides)
+        return BaselineTraceArtifactMissing(**defaults)
+
+    def test_kind_literal(self):
+        reason = self._build()
+        assert reason.kind == (
+            "baseline_trace_artifact_missing"
+        )
+
+    def test_needed_artifact_required(self):
+        with pytest.raises(ValidationError):
+            BaselineTraceArtifactMissing(
+                expected_artifact_path=Path("/tmp/x"),
+            )  # type: ignore[call-arg]
+
+    def test_expected_artifact_path_required(self):
+        with pytest.raises(ValidationError):
+            BaselineTraceArtifactMissing(
+                needed_artifact="page_errors_log",
+            )  # type: ignore[call-arg]
+
+    def test_unknown_artifact_rejected(self):
+        with pytest.raises(ValidationError):
+            self._build(needed_artifact="screenshots")
+
+    def test_default_recovery_present(self):
+        reason = self._build()
+        assert "open_agent.py" in reason.recovery
+        assert "expected_artifact_path" in reason.recovery
+        assert "To proceed:" in reason.recovery
+
+    def test_extra_fields_rejected(self):
+        with pytest.raises(ValidationError):
+            self._build(extra="nope")
+
+    def test_frozen(self):
+        reason = self._build()
+        with pytest.raises(ValidationError):
+            reason.needed_artifact = "page_errors_log"  # type: ignore[misc]
+
+
+class TestBaselineTraceLogMalformed:
+    def _build(self, **overrides):
+        defaults = dict(
+            log_path=Path(
+                "/tmp/case/trace/page_errors.jsonl"
+            ),
+            line_number=2,
+            parse_error="invalid JSON (Expecting value)",
+        )
+        defaults.update(overrides)
+        return BaselineTraceLogMalformed(**defaults)
+
+    def test_kind_literal(self):
+        reason = self._build()
+        assert reason.kind == (
+            "baseline_trace_log_malformed"
+        )
+
+    def test_log_path_required(self):
+        with pytest.raises(ValidationError):
+            BaselineTraceLogMalformed(
+                line_number=1,
+                parse_error="x",
+            )  # type: ignore[call-arg]
+
+    def test_parse_error_required(self):
+        with pytest.raises(ValidationError):
+            BaselineTraceLogMalformed(
+                log_path=Path("/tmp/x"),
+                line_number=1,
+            )  # type: ignore[call-arg]
+
+    def test_parse_error_min_length(self):
+        with pytest.raises(ValidationError):
+            self._build(parse_error="")
+
+    def test_line_number_optional(self):
+        reason = self._build(line_number=None)
+        assert reason.line_number is None
+
+    def test_line_number_minimum(self):
+        with pytest.raises(ValidationError):
+            self._build(line_number=0)
+
+    def test_default_recovery_present(self):
+        reason = self._build()
+        assert "log_path" in reason.recovery
+        assert "open_agent.py" in reason.recovery
+        assert "To proceed:" in reason.recovery
+
+    def test_extra_fields_rejected(self):
+        with pytest.raises(ValidationError):
+            self._build(extra="nope")
+
+    def test_frozen(self):
+        reason = self._build()
+        with pytest.raises(ValidationError):
+            reason.parse_error = "different"  # type: ignore[misc]
+
+    def test_from_error_classmethod_jsonl(self):
+        error = StructuredLogParseError(
+            path=Path("/tmp/case/trace/page_errors.jsonl"),
+            line_number=4,
+            parse_error="schema violation",
+        )
+        reason = BaselineTraceLogMalformed.from_error(error)
+        assert reason.log_path == error.path
+        assert reason.line_number == 4
+        assert reason.parse_error == "schema violation"

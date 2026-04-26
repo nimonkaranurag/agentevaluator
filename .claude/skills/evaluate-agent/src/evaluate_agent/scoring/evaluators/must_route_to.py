@@ -6,9 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
@@ -18,9 +15,12 @@ from evaluate_agent.scoring.outcomes import (
     ObservabilityLogMalformed,
     ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.routing_decision_log import (  # noqa: E501
+from evaluate_agent.scoring.resolvers.observability.routing_decision_log import (  # noqa: E501
     resolve_routing_decision_log,
     routing_decision_log_path,
+)
+from evaluate_agent.scoring.structured_log_parsing import (
+    StructuredLogParseError,
 )
 
 
@@ -30,7 +30,7 @@ def evaluate_must_route_to(
 ) -> AssertionOutcome:
     try:
         log = resolve_routing_decision_log(case_dir)
-    except ObservabilityLogMalformedError as exc:
+    except StructuredLogParseError as exc:
         return AssertionInconclusive(
             assertion_kind="must_route_to",
             target=target_agent,

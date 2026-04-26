@@ -2,20 +2,19 @@
 Score captured cases against their declared assertions.
 """
 
+from .baseline_trace import PageErrorEntry
 from .evaluators import (
     evaluate_final_response_contains,
     evaluate_max_steps,
     evaluate_must_call,
     evaluate_must_not_call,
     evaluate_must_route_to,
+    evaluate_no_uncaught_page_errors,
 )
 from .observability import (
-    ObservabilityLogMalformedError,
     RoutingDecision,
     StepCount,
     ToolCall,
-    parse_jsonl_log,
-    parse_single_json_log,
 )
 from .outcomes import (
     AssertionEvidence,
@@ -24,6 +23,8 @@ from .outcomes import (
     AssertionKind,
     AssertionOutcome,
     AssertionPassed,
+    BaselineTraceArtifactMissing,
+    BaselineTraceLogMalformed,
     DOMSnapshotUnavailable,
     InconclusiveReason,
     ObservabilityLogMalformed,
@@ -31,11 +32,14 @@ from .outcomes import (
 )
 from .resolvers import (
     ResolvedDOMSnapshot,
+    ResolvedPageErrorsLog,
     ResolvedRoutingDecisionLog,
     ResolvedStepCount,
     ResolvedToolCallLog,
     extract_visible_text,
+    page_errors_log_path,
     post_submit_dom_snapshot_dir,
+    resolve_page_errors_log,
     resolve_post_submit_dom_snapshot,
     resolve_routing_decision_log,
     resolve_step_count,
@@ -56,6 +60,11 @@ from .scores import (
     score_agent,
     score_case,
 )
+from .structured_log_parsing import (
+    StructuredLogParseError,
+    parse_jsonl_log,
+    parse_single_json_log,
+)
 
 __all__ = [
     "ASSERTION_KIND_SCHEMA_ORDER",
@@ -69,19 +78,23 @@ __all__ = [
     "AssertionOutcome",
     "AssertionPassed",
     "AssertionTargetRollup",
+    "BaselineTraceArtifactMissing",
+    "BaselineTraceLogMalformed",
     "CaseOutcomeRollup",
     "CaseScore",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilityLogMalformed",
-    "ObservabilityLogMalformedError",
     "ObservabilitySourceMissing",
+    "PageErrorEntry",
     "ResolvedDOMSnapshot",
+    "ResolvedPageErrorsLog",
     "ResolvedRoutingDecisionLog",
     "ResolvedStepCount",
     "ResolvedToolCallLog",
     "RoutingDecision",
     "StepCount",
+    "StructuredLogParseError",
     "TargetedAssertionKind",
     "ToolCall",
     "evaluate_final_response_contains",
@@ -89,10 +102,13 @@ __all__ = [
     "evaluate_must_call",
     "evaluate_must_not_call",
     "evaluate_must_route_to",
+    "evaluate_no_uncaught_page_errors",
     "extract_visible_text",
+    "page_errors_log_path",
     "parse_jsonl_log",
     "parse_single_json_log",
     "post_submit_dom_snapshot_dir",
+    "resolve_page_errors_log",
     "resolve_post_submit_dom_snapshot",
     "resolve_routing_decision_log",
     "resolve_step_count",
