@@ -30,12 +30,10 @@ _SRC_DIR = _SCRIPT_DIR.parent / "src"
 sys.path.insert(0, str(_SRC_DIR))
 
 from evaluate_agent.artifact_layout import (  # noqa: E402
-    InvalidRunId,
-    RunArtifactLayout,
-)
-from evaluate_agent.capture_labels import (  # noqa: E402
     LANDING_LABEL,
     POST_SUBMIT_LABEL,
+    InvalidRunId,
+    RunArtifactLayout,
 )
 from evaluate_agent.driver import (  # noqa: E402
     NAVIGATED_EVENT_SUFFIX,

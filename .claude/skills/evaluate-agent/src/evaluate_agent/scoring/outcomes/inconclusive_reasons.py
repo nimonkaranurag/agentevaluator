@@ -7,9 +7,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -190,17 +187,6 @@ class ObservabilityLogMalformed(_Strict):
             ),
         ),
     ]
-
-    @classmethod
-    def from_error(
-        cls,
-        error: ObservabilityLogMalformedError,
-    ) -> "ObservabilityLogMalformed":
-        return cls(
-            log_path=error.path,
-            line_number=error.line_number,
-            parse_error=error.parse_error,
-        )
 
 
 InconclusiveReason = Annotated[

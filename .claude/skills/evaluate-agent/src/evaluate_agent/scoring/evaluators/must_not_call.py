@@ -6,49 +6,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilityLogMalformed,
-    ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.tool_call_log import (
+from evaluate_agent.scoring.resolvers.log_resolvers.tool_call_log import (  # noqa: E501
     resolve_tool_call_log,
     tool_call_log_path,
 )
+
+from .utils import resolve_observability_log
 
 
 def evaluate_must_not_call(
     tool_name: str,
     case_dir: Path,
 ) -> AssertionOutcome:
-    try:
-        log = resolve_tool_call_log(case_dir)
-    except ObservabilityLogMalformedError as exc:
-        return AssertionInconclusive(
-            assertion_kind="must_not_call",
-            target=tool_name,
-            reason=ObservabilityLogMalformed.from_error(
-                exc
-            ),
-        )
-    if log is None:
-        return AssertionInconclusive(
-            assertion_kind="must_not_call",
-            target=tool_name,
-            reason=ObservabilitySourceMissing(
-                needed_evidence="tool_call_log",
-                expected_artifact_path=(
-                    tool_call_log_path(case_dir)
-                ),
-            ),
-        )
+    log = resolve_observability_log(
+        case_dir=case_dir,
+        assertion_kind="must_not_call",
+        target=tool_name,
+        needed_evidence="tool_call_log",
+        resolve=resolve_tool_call_log,
+        log_path=tool_call_log_path,
+    )
+    if isinstance(log, AssertionInconclusive):
+        return log
     for line_number, entry in enumerate(
         log.entries, start=1
     ):
@@ -56,7 +42,7 @@ def evaluate_must_not_call(
             return AssertionFailed(
                 assertion_kind="must_not_call",
                 target=tool_name,
-                expected=(f"no calls to {tool_name!r}"),
+                expected=f"no calls to {tool_name!r}",
                 observed=tool_name,
                 evidence=AssertionEvidence(
                     artifact_path=log.path,

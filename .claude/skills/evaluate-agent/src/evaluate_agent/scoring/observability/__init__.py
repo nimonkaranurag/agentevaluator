@@ -1,12 +1,8 @@
 """
-On-disk schema, parser, and error type for observability log files.
+On-disk schema and typed parse-error for the observability log files.
 """
 
 from .errors import ObservabilityLogMalformedError
-from .parsing import (
-    parse_jsonl_log,
-    parse_single_json_log,
-)
 from .schema import (
     RoutingDecision,
     StepCount,
@@ -18,6 +14,4 @@ __all__ = [
     "RoutingDecision",
     "StepCount",
     "ToolCall",
-    "parse_jsonl_log",
-    "parse_single_json_log",
 ]

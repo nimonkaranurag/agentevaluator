@@ -14,8 +14,6 @@ from .observability import (
     RoutingDecision,
     StepCount,
     ToolCall,
-    parse_jsonl_log,
-    parse_single_json_log,
 )
 from .outcomes import (
     AssertionEvidence,
@@ -90,8 +88,6 @@ __all__ = [
     "evaluate_must_not_call",
     "evaluate_must_route_to",
     "extract_visible_text",
-    "parse_jsonl_log",
-    "parse_single_json_log",
     "post_submit_dom_snapshot_dir",
     "resolve_post_submit_dom_snapshot",
     "resolve_routing_decision_log",

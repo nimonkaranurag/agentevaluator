@@ -6,49 +6,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.scoring.observability.errors import (
-    ObservabilityLogMalformedError,
-)
 from evaluate_agent.scoring.outcomes import (
     AssertionEvidence,
     AssertionFailed,
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilityLogMalformed,
-    ObservabilitySourceMissing,
 )
-from evaluate_agent.scoring.resolvers.routing_decision_log import (  # noqa: E501
+from evaluate_agent.scoring.resolvers.log_resolvers.routing_decision_log import (  # noqa: E501
     resolve_routing_decision_log,
     routing_decision_log_path,
 )
+
+from .utils import resolve_observability_log
 
 
 def evaluate_must_route_to(
     target_agent: str,
     case_dir: Path,
 ) -> AssertionOutcome:
-    try:
-        log = resolve_routing_decision_log(case_dir)
-    except ObservabilityLogMalformedError as exc:
-        return AssertionInconclusive(
-            assertion_kind="must_route_to",
-            target=target_agent,
-            reason=ObservabilityLogMalformed.from_error(
-                exc
-            ),
-        )
-    if log is None:
-        return AssertionInconclusive(
-            assertion_kind="must_route_to",
-            target=target_agent,
-            reason=ObservabilitySourceMissing(
-                needed_evidence=("routing_decision_log"),
-                expected_artifact_path=(
-                    routing_decision_log_path(case_dir)
-                ),
-            ),
-        )
+    log = resolve_observability_log(
+        case_dir=case_dir,
+        assertion_kind="must_route_to",
+        target=target_agent,
+        needed_evidence="routing_decision_log",
+        resolve=resolve_routing_decision_log,
+        log_path=routing_decision_log_path,
+    )
+    if isinstance(log, AssertionInconclusive):
+        return log
     for line_number, entry in enumerate(
         log.entries, start=1
     ):
