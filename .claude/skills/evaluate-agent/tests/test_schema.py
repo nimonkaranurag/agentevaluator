@@ -205,52 +205,6 @@ class TestAssertionConsistency:
             AgentManifest.model_validate(data)
 
 
-class TestNoUncaughtPageErrorsAssertion:
-    def test_omitted_field_defaults_to_none(self) -> None:
-        data = _minimal_manifest_dict()
-        manifest = AgentManifest.model_validate(data)
-        assertions = manifest.cases[0].assertions
-        assert assertions.no_uncaught_page_errors is None
-
-    def test_true_value_accepted(self) -> None:
-        data = _minimal_manifest_dict()
-        data["cases"][0]["assertions"] = {
-            "no_uncaught_page_errors": True,
-        }
-        manifest = AgentManifest.model_validate(data)
-        assertions = manifest.cases[0].assertions
-        assert assertions.no_uncaught_page_errors is True
-
-    def test_false_value_rejected(self) -> None:
-        data = _minimal_manifest_dict()
-        data["cases"][0]["assertions"] = {
-            "no_uncaught_page_errors": False,
-        }
-        with pytest.raises(ValidationError):
-            AgentManifest.model_validate(data)
-
-    def test_non_bool_rejected(self) -> None:
-        data = _minimal_manifest_dict()
-        data["cases"][0]["assertions"] = {
-            "no_uncaught_page_errors": "true",
-        }
-        with pytest.raises(ValidationError):
-            AgentManifest.model_validate(data)
-
-    def test_coexists_with_other_assertions(self) -> None:
-        data = _minimal_manifest_dict()
-        data["cases"][0]["assertions"] = {
-            "must_call": ["search"],
-            "final_response_contains": "ok",
-            "no_uncaught_page_errors": True,
-        }
-        manifest = AgentManifest.model_validate(data)
-        assertions = manifest.cases[0].assertions
-        assert assertions.must_call == ["search"]
-        assert assertions.final_response_contains == "ok"
-        assert assertions.no_uncaught_page_errors is True
-
-
 class TestAccess:
     def test_non_http_url_rejected(self) -> None:
         data = _minimal_manifest_dict()

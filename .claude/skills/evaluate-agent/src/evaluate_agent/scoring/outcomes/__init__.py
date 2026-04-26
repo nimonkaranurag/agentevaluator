@@ -3,8 +3,6 @@ Outcome data shapes — passed/failed/inconclusive plus the citation evidence.
 """
 
 from .inconclusive_reasons import (
-    BaselineTraceArtifactMissing,
-    BaselineTraceLogMalformed,
     DOMSnapshotUnavailable,
     InconclusiveReason,
     ObservabilityLogMalformed,
@@ -26,8 +24,6 @@ __all__ = [
     "AssertionKind",
     "AssertionOutcome",
     "AssertionPassed",
-    "BaselineTraceArtifactMissing",
-    "BaselineTraceLogMalformed",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilityLogMalformed",

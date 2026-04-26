@@ -17,11 +17,11 @@ OBSERVABILITY_SUBDIR = "observability"
 TOOL_CALL_LOG_FILENAME = "tool_calls.jsonl"
 ROUTING_DECISION_LOG_FILENAME = "routing_decisions.jsonl"
 STEP_COUNT_FILENAME = "step_count.json"
-PAGE_ERRORS_LOG_FILENAME = "page_errors.jsonl"
 _HAR_FILENAME = "network.har"
 _REQUESTS_FILENAME = "requests.jsonl"
 _RESPONSES_FILENAME = "responses.jsonl"
 _CONSOLE_FILENAME = "console.jsonl"
+_PAGE_ERRORS_FILENAME = "page_errors.jsonl"
 _AUTO_PREFIX = "auto"
 
 
@@ -137,7 +137,7 @@ class RunArtifactLayout:
             responses_path=trace_dir / _RESPONSES_FILENAME,
             console_path=trace_dir / _CONSOLE_FILENAME,
             page_errors_path=trace_dir
-            / PAGE_ERRORS_LOG_FILENAME,
+            / _PAGE_ERRORS_FILENAME,
         )
 
     def dom_snapshot_dir(self, case_id: str) -> Path:
@@ -170,13 +170,6 @@ class RunArtifactLayout:
             f"{event_suffix}.{DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
-
-    def page_errors_log_path(self, case_id: str) -> Path:
-        return (
-            self.case_dir(case_id)
-            / TRACE_SUBDIR
-            / PAGE_ERRORS_LOG_FILENAME
-        )
 
     def observability_log_dir(self, case_id: str) -> Path:
         return (
@@ -211,7 +204,6 @@ __all__ = [
     "DOM_SNAPSHOTS_SUBDIR",
     "EXPLICIT_DOM_PREFIX",
     "OBSERVABILITY_SUBDIR",
-    "PAGE_ERRORS_LOG_FILENAME",
     "ROUTING_DECISION_LOG_FILENAME",
     "RUN_ID_FORMAT",
     "STEP_COUNT_FILENAME",
