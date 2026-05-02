@@ -28,8 +28,13 @@ _MATCH_EXCERPT_PADDING = 80
 def evaluate_final_response_contains(
     expected_substring: str,
     case_dir: Path,
+    *,
+    max_dom_bytes: int,
 ) -> AssertionOutcome:
-    snapshot = resolve_post_submit_dom_snapshot(case_dir)
+    snapshot = resolve_post_submit_dom_snapshot(
+        case_dir,
+        max_dom_bytes=max_dom_bytes,
+    )
     if snapshot is None:
         return AssertionInconclusive(
             assertion_kind="final_response_contains",

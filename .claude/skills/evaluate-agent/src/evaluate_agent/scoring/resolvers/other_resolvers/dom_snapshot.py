@@ -5,7 +5,6 @@ user-visible text in a single resolution step.
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,13 +16,6 @@ from evaluate_agent.artifact_layout import (
     EXPLICIT_DOM_PREFIX,
     POST_SUBMIT_LABEL,
     TRACE_SUBDIR,
-)
-
-DOM_SNAPSHOT_SIZE_CAP_BYTES = int(
-    os.environ.get(
-        "DOM_SNAPSHOT_SIZE_CAP_BYTES",
-        25 * 1024 * 1024,
-    )
 )
 
 _NON_VISIBLE_TAGS = (
@@ -75,6 +67,8 @@ _FILENAME_PATTERN = re.compile(
 
 def resolve_post_submit_dom_snapshot(
     case_dir: Path,
+    *,
+    max_dom_bytes: int,
 ) -> ResolvedDOMSnapshot | OversizedDOMSnapshot | None:
     dom_dir = post_submit_dom_snapshot_dir(case_dir)
     if not dom_dir.is_dir():
@@ -87,12 +81,15 @@ def resolve_post_submit_dom_snapshot(
     if not candidates:
         return None
     latest = max(candidates, key=lambda pair: pair[0])[1]
+    # stat() before read_text() so a multi-hundred-MiB
+    # snapshot is rejected on metadata alone — never loaded
+    # into memory.
     size_bytes = latest.stat().st_size
-    if size_bytes > DOM_SNAPSHOT_SIZE_CAP_BYTES:
+    if size_bytes > max_dom_bytes:
         return OversizedDOMSnapshot(
             path=latest,
             size_bytes=size_bytes,
-            cap_bytes=DOM_SNAPSHOT_SIZE_CAP_BYTES,
+            cap_bytes=max_dom_bytes,
         )
     return ResolvedDOMSnapshot(
         path=latest,
@@ -103,7 +100,6 @@ def resolve_post_submit_dom_snapshot(
 
 
 __all__ = [
-    "DOM_SNAPSHOT_SIZE_CAP_BYTES",
     "OversizedDOMSnapshot",
     "ResolvedDOMSnapshot",
     "extract_visible_text",

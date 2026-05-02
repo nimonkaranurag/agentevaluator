@@ -130,7 +130,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    score = score_case(case=case, case_dir=case_dir)
+    score = score_case(
+        case=case,
+        case_dir=case_dir,
+        max_dom_bytes=manifest.interaction.max_dom_bytes,
+    )
     print(score.model_dump_json(indent=2))
     return 0
 

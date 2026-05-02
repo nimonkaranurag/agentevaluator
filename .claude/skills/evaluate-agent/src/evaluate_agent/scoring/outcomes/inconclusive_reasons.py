@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from evaluate_agent.common.types import StrictFrozen
-from pydantic import Field
+from pydantic import Field, model_validator
 
 _SCHEMA_MODULE_PATH = Path(
     importlib.util.find_spec(
@@ -118,12 +118,14 @@ class DOMSnapshotTooLarge(StrictFrozen):
                 "is visibly huge).\n"
                 "  (2) If the captured DOM legitimately "
                 "exceeds the cap and shrinking it is "
-                "not feasible, raise the cap by "
-                "setting the DOM_SNAPSHOT_SIZE_CAP_BYTES "
-                "environment variable to a value that "
-                "fits the workload before re-invoking "
-                "the scoring layer, noting the memory "
-                "and disk cost of larger captures."
+                "not feasible, raise interaction."
+                "max_dom_bytes in the manifest to a "
+                "value that fits the workload before "
+                "re-invoking the scoring layer, noting "
+                "the memory and disk cost of larger "
+                "captures. Manifest-declared so two "
+                "operators running the same agent.yaml "
+                "see identical scoring behavior."
             ),
             min_length=1,
             description=(
@@ -298,9 +300,122 @@ class ObservabilityLogMalformed(StrictFrozen):
     ]
 
 
+class GenerationCoverageIncomplete(StrictFrozen):
+    kind: Literal["generation_coverage_incomplete"] = (
+        "generation_coverage_incomplete"
+    )
+    field: Annotated[
+        Literal[
+            "total_tokens",
+            "total_cost_usd",
+            "latency_ms",
+        ],
+        Field(
+            description=(
+                "Per-generation field whose coverage is "
+                "incomplete. The assertion sums this field "
+                "across the case's generations and "
+                "compares against a declared cap; with "
+                "missing entries the sum would silently "
+                "undercount and a failing run could be "
+                "rendered as a passing one. Resolving to "
+                "inconclusive is the only honest answer "
+                "until the trace backend emits the field "
+                "for every generation."
+            ),
+        ),
+    ]
+    populated: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=(
+                "Count of generations carrying the field. "
+                "Zero means the field is absent everywhere "
+                "(self-hosted LangFuse without cost mapping, "
+                "for example); a value below total means "
+                "partial coverage."
+            ),
+        ),
+    ]
+    total: Annotated[
+        int,
+        Field(
+            ge=1,
+            description=(
+                "Total generation count in the captured "
+                "log. The assertion needs populated == "
+                "total to evaluate without undercounting."
+            ),
+        ),
+    ]
+    log_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path to generations.jsonl whose "
+                "rows were inspected. Cited verbatim so "
+                "the operator can open the file and find "
+                "which rows are missing the field."
+            ),
+        ),
+    ]
+    recovery: Annotated[
+        str,
+        Field(
+            default=(
+                "To proceed:\n"
+                "  (1) Open the log at log_path and "
+                "identify the rows whose 'field' value is "
+                "null. The row's span_id locates the "
+                "underlying generation in the trace "
+                "backend.\n"
+                "  (2) Wire the trace backend to emit the "
+                "missing field for every generation. For "
+                "LangFuse: confirm cost_details mapping "
+                "is configured for the model "
+                "(self-hosted instances often skip cost "
+                "mapping); confirm usage is emitted (some "
+                "providers report usage only on the final "
+                "chunk of a stream); confirm start_time "
+                "and end_time are stamped on every "
+                "generation span (latency_ms is derived "
+                "from these).\n"
+                "  (3) Re-run the case and re-score. "
+                "Partial coverage is intentionally "
+                "inconclusive rather than silently "
+                "undercounted — a passing assertion "
+                "against incomplete data is a false-pass, "
+                "not a green run."
+            ),
+            min_length=1,
+            description=(
+                "Numbered next steps the caller follows "
+                "to make the assertion evaluable on a "
+                "subsequent run."
+            ),
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _populated_within_total(
+        self,
+    ) -> "GenerationCoverageIncomplete":
+        if self.populated >= self.total:
+            raise ValueError(
+                f"populated ({self.populated}) must be "
+                f"strictly less than total ({self.total}) "
+                f"for incomplete coverage; full coverage "
+                f"resolves to passed/failed, not "
+                f"inconclusive"
+            )
+        return self
+
+
 InconclusiveReason = Annotated[
     DOMSnapshotUnavailable
     | DOMSnapshotTooLarge
+    | GenerationCoverageIncomplete
     | ObservabilitySourceMissing
     | ObservabilityLogMalformed,
     Field(discriminator="kind"),
@@ -310,6 +425,7 @@ InconclusiveReason = Annotated[
 __all__ = [
     "DOMSnapshotTooLarge",
     "DOMSnapshotUnavailable",
+    "GenerationCoverageIncomplete",
     "InconclusiveReason",
     "ObservabilityLogMalformed",
     "ObservabilitySourceMissing",

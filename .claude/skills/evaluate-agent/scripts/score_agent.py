@@ -224,7 +224,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     case_scores: list[CaseScore] = [
-        score_case(case=case, case_dir=directive.case_dir)
+        score_case(
+            case=case,
+            case_dir=directive.case_dir,
+            max_dom_bytes=manifest.interaction.max_dom_bytes,
+        )
         for directive, case in resolved
     ]
     agent_score: AgentScore = score_agent(

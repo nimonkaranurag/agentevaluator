@@ -12,14 +12,16 @@ from evaluate_agent.scoring.outcomes import (
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilitySourceMissing,
 )
 from evaluate_agent.scoring.resolvers.log_resolvers.generation_log import (  # noqa: E501
     generation_log_path,
     resolve_generation_log,
 )
 
-from .utils import resolve_observability_log
+from .utils import (
+    gate_generation_field_coverage,
+    resolve_observability_log,
+)
 
 
 def evaluate_max_total_cost_usd(
@@ -36,20 +38,18 @@ def evaluate_max_total_cost_usd(
     )
     if isinstance(log, AssertionInconclusive):
         return log
-    contributions = [
-        entry.total_cost_usd
-        for entry in log.entries
-        if entry.total_cost_usd is not None
-    ]
-    if not contributions:
-        return AssertionInconclusive(
-            assertion_kind="max_total_cost_usd",
-            target=None,
-            reason=ObservabilitySourceMissing(
-                needed_evidence="generation_log",
-                expected_artifact_path=log.path,
-            ),
-        )
+    # Coverage gate before sum: a self-hosted LangFuse without
+    # cost mapping leaves total_cost_usd null on every row.
+    # Summing the populated subset would silently report a
+    # cost below the cap and pass an assertion that should have
+    # surfaced its missing-evidence shape to the operator.
+    contributions = gate_generation_field_coverage(
+        log=log,
+        field_name="total_cost_usd",
+        assertion_kind="max_total_cost_usd",
+    )
+    if isinstance(contributions, AssertionInconclusive):
+        return contributions
     observed = sum(contributions)
     if observed <= cost_limit_usd:
         return AssertionPassed(

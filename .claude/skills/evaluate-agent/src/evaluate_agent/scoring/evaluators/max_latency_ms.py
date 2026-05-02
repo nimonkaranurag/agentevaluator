@@ -12,14 +12,16 @@ from evaluate_agent.scoring.outcomes import (
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilitySourceMissing,
 )
 from evaluate_agent.scoring.resolvers.log_resolvers.generation_log import (  # noqa: E501
     generation_log_path,
     resolve_generation_log,
 )
 
-from .utils import resolve_observability_log
+from .utils import (
+    gate_generation_field_coverage,
+    resolve_observability_log,
+)
 
 
 def evaluate_max_latency_ms(
@@ -36,21 +38,21 @@ def evaluate_max_latency_ms(
     )
     if isinstance(log, AssertionInconclusive):
         return log
-    contributions = [
-        entry.latency_ms
-        for entry in log.entries
-        if entry.latency_ms is not None
-    ]
-    if not contributions:
-        return AssertionInconclusive(
-            assertion_kind="max_latency_ms",
-            target=None,
-            reason=ObservabilitySourceMissing(
-                needed_evidence="generation_log",
-                expected_artifact_path=log.path,
-            ),
-        )
-    observed = sum(contributions)
+    # Coverage gate before sum: latency_ms is derived from the
+    # span's start_time / end_time, and traces with broken
+    # clocks or partial timestamping would otherwise undercount
+    # silently. Note: this still uses sum-of-per-generation
+    # latency, which double-counts parallel fan-out — that's
+    # tracked as a separate Session 4 fix (max latency should
+    # be wall-clock span, not sum).
+    contributions = gate_generation_field_coverage(
+        log=log,
+        field_name="latency_ms",
+        assertion_kind="max_latency_ms",
+    )
+    if isinstance(contributions, AssertionInconclusive):
+        return contributions
+    observed = int(sum(contributions))
     if observed <= latency_limit_ms:
         return AssertionPassed(
             assertion_kind="max_latency_ms",

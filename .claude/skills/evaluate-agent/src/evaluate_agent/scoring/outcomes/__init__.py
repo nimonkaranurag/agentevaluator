@@ -13,6 +13,7 @@ from .assertion_outcomes import (
 from .inconclusive_reasons import (
     DOMSnapshotTooLarge,
     DOMSnapshotUnavailable,
+    GenerationCoverageIncomplete,
     InconclusiveReason,
     ObservabilityLogMalformed,
     ObservabilitySourceMissing,
@@ -27,6 +28,7 @@ __all__ = [
     "AssertionPassed",
     "DOMSnapshotTooLarge",
     "DOMSnapshotUnavailable",
+    "GenerationCoverageIncomplete",
     "InconclusiveReason",
     "ObservabilityLogMalformed",
     "ObservabilitySourceMissing",
