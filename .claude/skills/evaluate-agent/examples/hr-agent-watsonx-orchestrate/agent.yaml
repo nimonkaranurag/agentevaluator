@@ -62,7 +62,7 @@ observability:
   langfuse:
     host: http://localhost:3010
     public_key_env: LANGFUSE_PUBLIC_KEY
-    secret_key_env: LANGFUSE_SECRET_KEY
+    secret_key_env: LANGFUSE_SECRET_KEY  # pragma: allowlist secret
 
 tools_catalog:
   - lookup_employee_record
