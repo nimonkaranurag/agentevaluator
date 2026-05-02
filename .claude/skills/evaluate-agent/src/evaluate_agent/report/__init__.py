@@ -16,6 +16,7 @@ from .renderers import (
     compose_case_narrative_section,
     compose_case_section,
     render_agent_score_markdown,
+    render_baseline_diff_section,
     render_case_narrative_section,
     render_case_score_markdown,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "compose_case_narrative_section",
     "compose_case_section",
     "render_agent_score_markdown",
+    "render_baseline_diff_section",
     "render_case_narrative_section",
     "render_case_score_markdown",
     "validate_citations",

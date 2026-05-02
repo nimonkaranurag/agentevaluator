@@ -23,12 +23,33 @@ per-case narratives looked up by case_id; missing per-case files are
 skipped silently and the report renders without their analytical
 sections.
 
+Optionally adds a baseline diff section. Use --baseline <path> with an
+AgentScore record to compute a per-assertion diff against a prior
+AgentScore (matched by (case_id, assertion_kind, target)). The diff
+section enumerates assertions newly failing, newly inconclusive, newly
+passing, introduced, and removed since the baseline. When the input
+AgentScore already carries an embedded baseline_diff (from
+score_agent.py --baseline), that embedded diff is rendered when
+--baseline is omitted; --baseline overrides it by recomputing fresh
+against the supplied baseline.
+
 Autodetects whether the input is an AgentScore (presence of the
-agent_name field) or a CaseScore. Exits 0 once rendering completes.
-Exits 1 on a missing or malformed score file, on a record that does
-not validate as either type, on an unresolved citation reported by
-either structural integrity check, or on any narrative-grounding
-violation.
+agent_name field) or a CaseScore. Diagnostic logging (errors, warnings)
+is emitted on stderr in either text or JSON form, controlled by
+--log-format.
+
+Exits 0 once rendering completes. Exits 1 on a missing or malformed
+score file, on a record that does not validate as either type, on a
+narrative-flag misuse, on a baseline-flag misuse (a CaseScore with
+--baseline; a baseline file that is not an AgentScore; a baseline
+agent_name that does not match the current agent_name), on an
+unresolved citation reported by either structural integrity check, or
+on any narrative-grounding violation.
+
+When --metrics PATH is supplied, the script writes a single JSON
+document to PATH at completion that records per-phase wall-clock timing
+(load_score, [load_narrative | load_narratives], [load_baseline,
+compute_baseline_diff], render) and the script's exit status.
 """
 
 from __future__ import annotations
@@ -51,6 +72,16 @@ from evaluate_agent.case_narrative import (  # noqa: E402
 from evaluate_agent.common.errors.case_narrative import (  # noqa: E402
     CaseNarrativeError,
 )
+from evaluate_agent.common.errors.scoring import (  # noqa: E402
+    BaselineAgentMismatchError,
+)
+from evaluate_agent.common.phase_metrics import (  # noqa: E402
+    MetricsCollector,
+)
+from evaluate_agent.common.script_logging import (  # noqa: E402
+    LOG_FORMATS,
+    configure_script_logging,
+)
 from evaluate_agent.report import (  # noqa: E402
     UnresolvedCitationError,
     render_agent_score_markdown,
@@ -58,7 +89,9 @@ from evaluate_agent.report import (  # noqa: E402
 )
 from evaluate_agent.scoring import (  # noqa: E402
     AgentScore,
+    BaselineDiff,
     CaseScore,
+    compute_baseline_diff,
 )
 
 _NARRATIVE_FILE_SUFFIX = ".json"
@@ -75,6 +108,10 @@ class _ScoreLoadError(_RenderReportError):
 
 
 class _NarrativeFlagMisuseError(_RenderReportError):
+    pass
+
+
+class _BaselineFlagMisuseError(_RenderReportError):
     pass
 
 
@@ -122,6 +159,41 @@ def _parse_args(
             "corresponding file render without an "
             "analytical section. Only valid with an "
             "AgentScore record."
+        ),
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a prior AgentScore JSON file. "
+            "When set, the rendered report adds a "
+            "Diff vs baseline section that pairs "
+            "every current assertion outcome against "
+            "the baseline outcome by (case_id, "
+            "assertion_kind, target). Only valid with "
+            "an AgentScore record. Overrides any "
+            "baseline_diff embedded in the score."
+        ),
+    )
+    parser.add_argument(
+        "--log-format",
+        choices=LOG_FORMATS,
+        default="text",
+        help=(
+            "Format for diagnostic log records on "
+            "stderr. Default: text. CI consumers "
+            "should select json."
+        ),
+    )
+    parser.add_argument(
+        "--metrics",
+        type=Path,
+        default=None,
+        help=(
+            "Path to write the per-phase timing JSON "
+            "document to at script completion. Omit "
+            "to skip metrics emission."
         ),
     )
     return parser.parse_args(argv)
@@ -202,6 +274,42 @@ def _validate_as(
         ) from exc
 
 
+def _load_baseline_score(
+    baseline_path: Path,
+) -> AgentScore:
+    if not baseline_path.is_file():
+        raise _BaselineFlagMisuseError(
+            f"Baseline AgentScore file does not "
+            f"exist or is not a file: {baseline_path}\n"
+            f"To proceed:\n"
+            f"  (1) Confirm the path matches the "
+            f"JSON file score_agent.py emitted on a "
+            f"prior run for the same agent.\n"
+            f"  (2) Re-invoke without --baseline to "
+            f"render the report without a diff "
+            f"section, or correct the path and "
+            f"re-invoke."
+        )
+    raw = baseline_path.read_text(encoding="utf-8")
+    try:
+        return AgentScore.model_validate_json(raw)
+    except ValidationError as exc:
+        raise _BaselineFlagMisuseError(
+            f"Baseline file at {baseline_path} did "
+            f"not validate against the AgentScore "
+            f"schema.\n"
+            f"Validation errors:\n{exc}\n"
+            f"To proceed:\n"
+            f"  (1) Confirm the file was produced "
+            f"by an unmodified score_agent.py "
+            f"invocation.\n"
+            f"  (2) Re-run score_agent.py against "
+            f"the baseline plan and overwrite the "
+            f"file, then re-invoke render_report.py "
+            f"--baseline."
+        ) from exc
+
+
 def _enforce_narrative_flag_compatibility(
     score: CaseScore | AgentScore,
     narrative_path: Path | None,
@@ -226,6 +334,23 @@ def _enforce_narrative_flag_compatibility(
             "with --narrative <path> and supply the "
             "single CaseNarrative JSON file for this "
             "case."
+        )
+
+
+def _enforce_baseline_flag_compatibility(
+    score: CaseScore | AgentScore,
+    baseline_path: Path | None,
+) -> None:
+    if baseline_path is None:
+        return
+    if isinstance(score, CaseScore):
+        raise _BaselineFlagMisuseError(
+            "--baseline is for AgentScore records; "
+            "the score file is a CaseScore. Per-case "
+            "diffs are not supported.\n"
+            "To proceed: omit --baseline, or render "
+            "the report against the agent-level "
+            "score that aggregates this case."
         )
 
 
@@ -295,10 +420,13 @@ def _render(
     *,
     narrative: CaseNarrative | None,
     narratives: dict[str, CaseNarrative] | None,
+    baseline_diff: BaselineDiff | None,
 ) -> str:
     if isinstance(score, AgentScore):
         return render_agent_score_markdown(
-            score, narratives=narratives
+            score,
+            narratives=narratives,
+            baseline_diff=baseline_diff,
         )
     return render_case_score_markdown(
         score, narrative=narrative
@@ -309,67 +437,119 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(
         sys.argv[1:] if argv is None else argv
     )
-    try:
-        score = _load_score(args.score.resolve())
-    except _RenderReportError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    narrative_path = (
-        args.narrative.resolve()
-        if args.narrative is not None
-        else None
+    logger = configure_script_logging(
+        script_name="render_report",
+        log_format=args.log_format,
     )
-    narratives_dir = (
-        args.narratives_dir.resolve()
-        if args.narratives_dir is not None
-        else None
-    )
-
+    metrics = MetricsCollector(script_name="render_report")
+    exit_code = 1
     try:
-        _enforce_narrative_flag_compatibility(
-            score=score,
-            narrative_path=narrative_path,
-            narratives_dir=narratives_dir,
+        try:
+            with metrics.phase("load_score"):
+                score = _load_score(args.score.resolve())
+        except _RenderReportError as exc:
+            logger.error("%s", exc)
+            return 1
+
+        narrative_path = (
+            args.narrative.resolve()
+            if args.narrative is not None
+            else None
         )
-    except _RenderReportError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+        narratives_dir = (
+            args.narratives_dir.resolve()
+            if args.narratives_dir is not None
+            else None
+        )
+        baseline_path = (
+            args.baseline.resolve()
+            if args.baseline is not None
+            else None
+        )
 
-    narrative: CaseNarrative | None = None
-    narratives: dict[str, CaseNarrative] | None = None
-    try:
-        if narrative_path is not None:
-            narrative = _load_case_narrative_or_exit(
-                narrative_path
+        try:
+            _enforce_narrative_flag_compatibility(
+                score=score,
+                narrative_path=narrative_path,
+                narratives_dir=narratives_dir,
             )
-        elif narratives_dir is not None and isinstance(
+            _enforce_baseline_flag_compatibility(
+                score=score,
+                baseline_path=baseline_path,
+            )
+        except _RenderReportError as exc:
+            logger.error("%s", exc)
+            return 1
+
+        narrative: CaseNarrative | None = None
+        narratives: dict[str, CaseNarrative] | None = None
+        try:
+            if narrative_path is not None:
+                with metrics.phase("load_narrative"):
+                    narrative = (
+                        _load_case_narrative_or_exit(
+                            narrative_path
+                        )
+                    )
+            elif narratives_dir is not None and isinstance(
+                score, AgentScore
+            ):
+                with metrics.phase("load_narratives"):
+                    narratives = _load_agent_narratives(
+                        narratives_dir, score
+                    )
+        except CaseNarrativeError as exc:
+            logger.error("%s", exc)
+            return 1
+        except _RenderReportError as exc:
+            logger.error("%s", exc)
+            return 1
+
+        baseline_diff: BaselineDiff | None = None
+        if baseline_path is not None and isinstance(
             score, AgentScore
         ):
-            narratives = _load_agent_narratives(
-                narratives_dir, score
-            )
-    except CaseNarrativeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    except _RenderReportError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+            try:
+                with metrics.phase("load_baseline"):
+                    baseline_score = _load_baseline_score(
+                        baseline_path
+                    )
+                with metrics.phase("compute_baseline_diff"):
+                    baseline_diff = compute_baseline_diff(
+                        baseline=baseline_score,
+                        current=score,
+                    )
+            except _RenderReportError as exc:
+                logger.error("%s", exc)
+                return 1
+            except BaselineAgentMismatchError as exc:
+                logger.error("%s", exc)
+                return 1
 
-    try:
-        markdown = _render(
-            score,
-            narrative=narrative,
-            narratives=narratives,
+        try:
+            with metrics.phase("render"):
+                markdown = _render(
+                    score,
+                    narrative=narrative,
+                    narratives=narratives,
+                    baseline_diff=baseline_diff,
+                )
+        except UnresolvedCitationError as exc:
+            logger.error("%s", exc)
+            return 1
+        except CaseNarrativeError as exc:
+            logger.error("%s", exc)
+            return 1
+        sys.stdout.write(markdown)
+        exit_code = 0
+        return exit_code
+    finally:
+        metrics.emit_if_configured(
+            args.metrics,
+            exit_status=(
+                "success" if exit_code == 0 else "error"
+            ),
         )
-    except UnresolvedCitationError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    except CaseNarrativeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    sys.stdout.write(markdown)
-    return 0
 
 
 if __name__ == "__main__":

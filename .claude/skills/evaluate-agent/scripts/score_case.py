@@ -16,9 +16,18 @@ and emits a JSON CaseScore record to stdout. Every passed or failed
 outcome cites a real artifact path; every inconclusive outcome names the
 evidence it required and how to make it available on a subsequent run.
 
+Diagnostic logging (errors, warnings) is emitted on stderr in either
+text or JSON form, controlled by --log-format.
+
 Exits 0 when scoring completes (regardless of pass/fail/inconclusive
 counts). Exits 1 on any manifest, case-selection, or case-directory
-error printed to stderr.
+error (logged to stderr with the actionable recovery procedure embedded
+in the message).
+
+When --metrics PATH is supplied, the script writes a single JSON
+document to PATH at completion that records per-phase wall-clock timing
+(load_manifest, score_case), the script's exit status, and contextual
+identifiers (manifest_path, case_id, case_dir).
 """
 
 from __future__ import annotations
@@ -31,6 +40,13 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _SRC_DIR = _SCRIPT_DIR.parent / "src"
 sys.path.insert(0, str(_SRC_DIR))
 
+from evaluate_agent.common.phase_metrics import (  # noqa: E402
+    MetricsCollector,
+)
+from evaluate_agent.common.script_logging import (  # noqa: E402
+    LOG_FORMATS,
+    configure_script_logging,
+)
 from evaluate_agent.manifest import (  # noqa: E402
     ManifestError,
     load_manifest,
@@ -76,6 +92,26 @@ def _parse_args(
             "Outcomes cite artifacts under this path."
         ),
     )
+    parser.add_argument(
+        "--log-format",
+        choices=LOG_FORMATS,
+        default="text",
+        help=(
+            "Format for diagnostic log records on "
+            "stderr. Default: text. CI consumers "
+            "should select json."
+        ),
+    )
+    parser.add_argument(
+        "--metrics",
+        type=Path,
+        default=None,
+        help=(
+            "Path to write the per-phase timing JSON "
+            "document to at script completion. Omit "
+            "to skip metrics emission."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -83,60 +119,102 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(
         sys.argv[1:] if argv is None else argv
     )
+    logger = configure_script_logging(
+        script_name="score_case",
+        log_format=args.log_format,
+    )
+    metrics = MetricsCollector(script_name="score_case")
+    metrics.set_context(
+        manifest_path=str(args.path),
+        case_id=args.case,
+        case_dir=str(args.case_dir),
+    )
+    exit_code = 1
     try:
-        manifest = load_manifest(args.path)
-    except ManifestError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
+        try:
+            with metrics.phase("load_manifest"):
+                manifest = load_manifest(args.path)
+        except ManifestError as exc:
+            logger.error(
+                "Manifest failed to load: %s",
+                exc,
+                extra={"manifest_path": str(args.path)},
+            )
+            return 1
 
-    case = next(
-        (c for c in manifest.cases if c.id == args.case),
-        None,
-    )
-    if case is None:
-        declared_ids = ", ".join(
-            c.id for c in manifest.cases
+        case = next(
+            (
+                c
+                for c in manifest.cases
+                if c.id == args.case
+            ),
+            None,
         )
-        print(
-            f"Case {args.case!r} is not declared in "
-            f"manifest {args.path}.\n"
-            f"To proceed: re-invoke with --case set to "
-            f"one of the declared case ids, or add the "
-            f"case to the manifest's cases: list.\n"
-            f"Declared case ids: {declared_ids}",
-            file=sys.stderr,
-        )
-        return 1
+        if case is None:
+            declared_ids = ", ".join(
+                c.id for c in manifest.cases
+            )
+            logger.error(
+                "Case %r is not declared in manifest "
+                "%s.\n"
+                "To proceed: re-invoke with --case set "
+                "to one of the declared case ids, or "
+                "add the case to the manifest's cases: "
+                "list.\n"
+                "Declared case ids: %s",
+                args.case,
+                args.path,
+                declared_ids,
+                extra={
+                    "manifest_path": str(args.path),
+                    "case_id": args.case,
+                },
+            )
+            return 1
 
-    case_dir = args.case_dir.resolve()
-    if not case_dir.is_dir():
-        print(
-            f"Case directory does not exist or is not "
-            f"a directory: {case_dir}\n"
-            f"To proceed:\n"
-            f"  (1) Confirm the path matches the case "
-            f"directory the per-case driving procedure "
-            f"in SKILL.md wrote, namely "
-            f"<runs_root>/<agent>/<run_id>/<case_id>/. "
-            f"When plan_swarm.py was used, the "
-            f"directive's case_dir field is the "
-            f"authoritative path.\n"
-            f"  (2) Re-execute the per-case driving "
-            f"procedure (SKILL.md) against this manifest "
-            f"and case to capture artifacts under the "
-            f"case directory, or re-invoke score_case.py "
-            f"with a corrected --case-dir path.",
-            file=sys.stderr,
-        )
-        return 1
+        case_dir = args.case_dir.resolve()
+        if not case_dir.is_dir():
+            logger.error(
+                "Case directory does not exist or is "
+                "not a directory: %s\n"
+                "To proceed:\n"
+                "  (1) Confirm the path matches the "
+                "case directory the per-case driving "
+                "procedure in SKILL.md wrote, namely "
+                "<runs_root>/<agent>/<run_id>/"
+                "<case_id>/. When plan_swarm.py was "
+                "used, the directive's case_dir field "
+                "is the authoritative path.\n"
+                "  (2) Re-execute the per-case driving "
+                "procedure (SKILL.md) against this "
+                "manifest and case to capture artifacts "
+                "under the case directory, or "
+                "re-invoke score_case.py with a "
+                "corrected --case-dir path.",
+                case_dir,
+                extra={
+                    "case_id": args.case,
+                    "case_dir": str(case_dir),
+                },
+            )
+            return 1
 
-    score = score_case(
-        case=case,
-        case_dir=case_dir,
-        max_dom_bytes=manifest.interaction.max_dom_bytes,
-    )
-    print(score.model_dump_json(indent=2))
-    return 0
+        with metrics.phase("score_case"):
+            score = score_case(
+                case=case,
+                case_dir=case_dir,
+                max_dom_bytes=manifest.interaction.max_dom_bytes,
+            )
+        print(score.model_dump_json(indent=2))
+        exit_code = 0
+        return exit_code
+    finally:
+        metrics.emit_if_configured(
+            args.metrics,
+            exit_status=(
+                "success" if exit_code == 0 else "error"
+            ),
+        )
 
 
 if __name__ == "__main__":

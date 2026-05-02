@@ -14,8 +14,19 @@ Loads a CaseNarrative JSON file and a CaseScore JSON file, verifies that
 the narrative's case_id matches the score's case_id, and verifies that
 every citation inside the narrative resolves to a real file under the
 score's case_dir. Prints a formal success block on stdout when the
-narrative is grounded; prints a structured numbered recovery procedure
-on stderr and exits 1 when any check fails.
+narrative is grounded.
+
+Diagnostic logging (errors, warnings) is emitted on stderr in either
+text or JSON form, controlled by --log-format.
+
+Exits 0 when the narrative is grounded; 1 on any score-load,
+narrative-load, or grounding failure (logged to stderr with the
+actionable recovery procedure embedded in the message).
+
+When --metrics PATH is supplied, the script writes a single JSON
+document to PATH at completion that records per-phase wall-clock timing
+(load_score, load_narrative, verify), the script's exit status, and
+contextual identifiers (case_id).
 """
 
 from __future__ import annotations
@@ -37,6 +48,13 @@ from evaluate_agent.case_narrative import (  # noqa: E402
 )
 from evaluate_agent.common.errors.case_narrative import (  # noqa: E402
     CaseNarrativeError,
+)
+from evaluate_agent.common.phase_metrics import (  # noqa: E402
+    MetricsCollector,
+)
+from evaluate_agent.common.script_logging import (  # noqa: E402
+    LOG_FORMATS,
+    configure_script_logging,
 )
 from evaluate_agent.scoring import (  # noqa: E402
     CaseScore,
@@ -84,6 +102,26 @@ def _parse_args(
             "stdout by score_case.py). Narratives are "
             "always validated against a single case "
             "score, never against an AgentScore."
+        ),
+    )
+    parser.add_argument(
+        "--log-format",
+        choices=LOG_FORMATS,
+        default="text",
+        help=(
+            "Format for diagnostic log records on "
+            "stderr. Default: text. CI consumers "
+            "should select json."
+        ),
+    )
+    parser.add_argument(
+        "--metrics",
+        type=Path,
+        default=None,
+        help=(
+            "Path to write the per-phase timing JSON "
+            "document to at script completion. Omit "
+            "to skip metrics emission."
         ),
     )
     return parser.parse_args(argv)
@@ -198,34 +236,55 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(
         sys.argv[1:] if argv is None else argv
     )
-    try:
-        score = _load_score(args.score.resolve())
-    except _ValidateNarrativeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    try:
-        narrative = load_case_narrative(
-            args.narrative.resolve()
-        )
-    except CaseNarrativeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    try:
-        verify_narrative_against_score(
-            narrative, score=score
-        )
-    except CaseNarrativeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    _print_success_block(
-        narrative_path=args.narrative.resolve(),
-        score_path=args.score.resolve(),
-        score=score,
-        citations_count=_count_citations(
-            args.narrative.resolve()
-        ),
+    logger = configure_script_logging(
+        script_name="validate_narrative",
+        log_format=args.log_format,
     )
-    return 0
+    metrics = MetricsCollector(
+        script_name="validate_narrative"
+    )
+    exit_code = 1
+    try:
+        try:
+            with metrics.phase("load_score"):
+                score = _load_score(args.score.resolve())
+        except _ValidateNarrativeError as exc:
+            logger.error("%s", exc)
+            return 1
+        metrics.set_context(case_id=score.case_id)
+        try:
+            with metrics.phase("load_narrative"):
+                narrative = load_case_narrative(
+                    args.narrative.resolve()
+                )
+        except CaseNarrativeError as exc:
+            logger.error("%s", exc)
+            return 1
+        try:
+            with metrics.phase("verify"):
+                verify_narrative_against_score(
+                    narrative, score=score
+                )
+        except CaseNarrativeError as exc:
+            logger.error("%s", exc)
+            return 1
+        _print_success_block(
+            narrative_path=args.narrative.resolve(),
+            score_path=args.score.resolve(),
+            score=score,
+            citations_count=_count_citations(
+                args.narrative.resolve()
+            ),
+        )
+        exit_code = 0
+        return exit_code
+    finally:
+        metrics.emit_if_configured(
+            args.metrics,
+            exit_status=(
+                "success" if exit_code == 0 else "error"
+            ),
+        )
 
 
 if __name__ == "__main__":
