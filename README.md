@@ -84,8 +84,38 @@ observability:
 
 ![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI for basic eval metrics, and/or optionally using its trace emitting backend for deeper insights*
 
+<br>
 
+## CI integration 
 
+Every script under [`.claude/skills/evaluate-agent/scripts/`](.claude/skills/evaluate-agent/scripts/) (`validate_manifest`, `discover_manifests`, `plan_swarm`, `score_case`, `score_agent`, `render_report`, `fetch_observability`, `validate_narrative`) accepts the same two CI-oriented flags:
+
+```sh
+--log-format {text,json}    # diagnostic logs on stderr (default: text)
+--metrics PATH              # JSON timing document written to PATH at completion
+```
+
+`--log-format json` emits one JSON object per log record on stderr with `timestamp`, `level`, `logger`, `message`, plus contextual fields (`run_id`, `case_id`, `assertion_kind`, `manifest_path`, `case_dir`) when bound — pipe straight into your log aggregator. `--metrics PATH` writes a `ScriptMetrics` JSON document to PATH on both success and error paths, recording per-phase wall-clock timing, the script's `exit_status`, and the bound context. Stdout primary output (success blocks, JSON records, Markdown reports) is unaffected, so `score_agent.py | render_report.py /dev/stdin` still composes.
+
+```sh
+score_agent.py plan.json --metrics runs/myagent/20260502T120000Z/score.metrics.json > score.json
+render_report.py score.json --metrics runs/myagent/20260502T120000Z/render.metrics.json > report.md
+```
+
+## Regression detection against a baseline
+
+`score_agent.py` and `render_report.py` accept `--baseline PATH` pointing at a prior `AgentScore` JSON for the same agent. The diff pairs every assertion across runs by `(case_id, assertion_kind, target)` and categorizes each transition as `newly_failing`, `newly_inconclusive`, `newly_passing`, `unchanged`, `introduced`, or `removed`.
+
+```sh
+# Score the new run against last week's baseline; the AgentScore output
+# carries an embedded baseline_diff field for downstream consumers.
+score_agent.py plan.json --baseline runs/myagent/20260425T120000Z/score.json > score.json
+
+# Render the report with a Diff vs baseline section.
+render_report.py score.json --baseline runs/myagent/20260425T120000Z/score.json > report.md
+```
+
+A baseline whose `agent_name` does not match the current run is rejected with an actionable error. Pipe `--metrics PATH` alongside to track diff-computation cost across runs.
 
 <br>
 
