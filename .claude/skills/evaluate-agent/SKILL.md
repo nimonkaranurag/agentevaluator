@@ -121,10 +121,23 @@ Reads a swarm plan produced by `plan_swarm.py`, loads the manifest the plan refe
 
 Exit 0 once aggregation completes, regardless of pass / fail / inconclusive counts. Exit 1 on a missing or malformed plan file, a manifest load error, a plan that references case ids the manifest does not declare, or any case directory in the plan that does not exist on disk.
 
+### Validate a case narrative against its bound score
+
+```
+uv run .claude/skills/evaluate-agent/scripts/validate_narrative.py <path-to-narrative.json> --score <path-to-case-score.json>
+```
+
+Loads a `CaseNarrative` JSON file and a `CaseScore` JSON file, checks two invariants, and prints a formal block on success.
+
+- The narrative's `case_id` matches the score's `case_id`. A narrative for one case must never be embedded in another case's report.
+- Every citation inside the narrative resolves to a regular file under the score's `case_dir`. Citations that do not resolve to a real file fail with `path_does_not_exist`. Citations that resolve to a real file outside `case_dir` fail with `path_outside_case_directory`. Every failure is enumerated in stderr with a dotted path locating the offending citation inside the narrative document.
+
+Exit 0 when the narrative is grounded; exit 1 on any narrative-grounding violation, a malformed or missing narrative file, or any error loading the score.
+
 ### Render a score record as a Markdown report
 
 ```
-uv run .claude/skills/evaluate-agent/scripts/render_report.py <path-to-score.json>
+uv run .claude/skills/evaluate-agent/scripts/render_report.py <path-to-score.json> [--narrative <case-narrative.json>] [--narratives-dir <narratives-dir>]
 ```
 
 Reads a JSON score file produced by `score_case.py` (`CaseScore`) or `score_agent.py` (`AgentScore`), verifies that every cited artifact path inside the record resolves to a real file or directory on disk, and emits a Markdown narrative to stdout. The script autodetects the record type by the presence of the top-level `agent_name` field. Every cited artifact path appears verbatim in the rendered report so a reader can open the file and inspect the underlying evidence; the structural integrity check guarantees no rendered citation points at a missing artifact.
@@ -133,7 +146,9 @@ For an `AgentScore`, the report is structured as: an `H1` header naming the agen
 
 For a `CaseScore`, the report is structured as: an `H1` header naming the case with a one-line summary of pass/fail/inconclusive counts; the case directory; and a list of every assertion outcome. Each `passed` outcome cites its `evidence.artifact_path`; each `failed` outcome lists `expected` and `observed` plus the evidence path; each `inconclusive` outcome names the reason kind and relays the recovery procedure verbatim.
 
-Exit 0 once rendering completes. Exit 1 on a missing or malformed score file, a record that does not validate against either the `CaseScore` or `AgentScore` schema, or any unresolved citation reported by the structural integrity check (with a numbered recovery procedure on stderr naming the score command and the run directory the citations point at).
+`--narrative <path>` (CaseScore only) embeds an analytical narrative under the rendered case section; the renderer verifies that the narrative's `case_id` matches and that every narrative citation resolves under the score's `case_dir` before composing. `--narratives-dir <dir>` (AgentScore only) loads per-case narrative files keyed by `<case_id>.json` from the directory; cases without a corresponding file render without an analytical section, and any narrative whose `case_id` is not declared in the score is rejected. The two flags are mutually exclusive — pick the one that matches the score type.
+
+Exit 0 once rendering completes. Exit 1 on a missing or malformed score file, a record that does not validate against either the `CaseScore` or `AgentScore` schema, any unresolved citation reported by the structural integrity check, or any narrative-grounding violation surfaced by `--narrative` or `--narratives-dir` (each with a numbered recovery procedure on stderr).
 
 ## When the user asks to evaluate an agent — CRITICAL
 
@@ -151,14 +166,29 @@ Follow these steps in order. Do not skip or reorder them.
     - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
 5. **Score every driven case.** Branch on which driver invocation step 4 ran:
-    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 6.
-    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 6.
+    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 7.
+    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 7.
 
-6. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 5. The script autodetects the record type (`CaseScore` vs `AgentScore`), verifies that every cited artifact path resolves on disk, and emits a structured Markdown narrative to stdout. Relay the rendered Markdown to the user verbatim — every artifact citation is a real path the user can open, and the recovery procedure for every inconclusive outcome is inlined in the rendered report. If the script raises `UnresolvedCitationError`, relay the stderr recovery procedure to the user verbatim and STOP.
+6. **Synthesize a per-case analytical narrative — CRITICAL.** For every case driven and scored in step 4 + 5, compose a `CaseNarrative` JSON file that explains WHY the case passed, failed, or was inconclusive. The narrative is the analytical layer the rendered report embeds; without it the report is a metric dump.
 
-7. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
+    - **Schema.** `case_id` (matches the score), `summary` (one paragraph), and `observations` (one or more grounded statements). Each observation has a `kind` (`behavior`, `tool_use`, `routing`, `failure_mode`, `success_mode`), a one-sentence factual `claim`, and one or more `citations`. Each citation is a `{artifact_path, locator?}` pair pointing at a real captured file under the case directory. The authoritative schema is at [src/evaluate_agent/case_narrative/schema.py](src/evaluate_agent/case_narrative/schema.py).
+    - **Ground every claim — CRITICAL.** Every observation MUST cite at least one captured artifact under the case directory. Citations MUST be absolute paths to files that already exist on disk (the screenshots, DOM snapshots, trace JSONL files, and observability logs the driver produced). NEVER invent a path; the validator rejects narratives whose citations do not resolve.
+    - **Stay inside the case directory — CRITICAL.** Citations MUST live under the case's `case_dir`. A narrative for case A must never cite an artifact captured for case B; the validator rejects cross-case citations.
+    - **Claim only what the evidence shows — CRITICAL.** Each `claim` is a factual statement directly supported by the cited evidence. Do NOT speculate about behavior the captured artifacts do not show. Do NOT pattern-match against memory of how similar agents typically behave. The narrative explains, it does not extrapolate.
+    - **Persist the narrative.**
+        - Single case: write the JSON to `<case_dir>/narrative.json`.
+        - Whole agent: write one file per case to `<runs_root>/<agent>/<run_id>/narratives/<case_id>.json`. Use the same case ids the score record declares.
+    - **Validate before rendering.** For every persisted narrative, run `validate_narrative.py <narrative.json> --score <case_score.json>`. If the validator exits 1, relay its stderr verbatim to the user, fix the failing citations, and re-validate before proceeding to step 7. The validator is the structural anti-hallucination guarantee; never bypass it.
 
-8. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+7. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 5, and pass the synthesized narrative(s) from step 6:
+    - Single case: `render_report.py <case-score.json> --narrative <case_dir>/narrative.json`.
+    - Whole agent: `render_report.py <agent-score.json> --narratives-dir <runs_root>/<agent>/<run_id>/narratives`.
+
+    The script autodetects the record type (`CaseScore` vs `AgentScore`), verifies that every cited artifact path inside the score resolves on disk, verifies each supplied narrative against its bound case score, and emits a structured Markdown narrative to stdout. Relay the rendered Markdown to the user verbatim — every artifact citation is a real path the user can open, the recovery procedure for every inconclusive outcome is inlined in the rendered report, and every analytical claim is grounded in a citation that resolves on disk. If the script raises `UnresolvedCitationError`, `NarrativeCaseMismatchError`, `NarrativeCitationsUnresolvedError`, or `NarrativeUnknownCaseIdsError`, relay the stderr recovery procedure to the user verbatim and STOP.
+
+8. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
+
+9. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
 ## Design principles
 
@@ -166,3 +196,4 @@ Follow these steps in order. Do not skip or reorder them.
 - **Observability is opt-in.** Playwright capture (network HAR, page event streams, screenshots) is the always-on baseline; declared sources under `observability` only enrich it. Do not ask the user to configure tracing.
 - **Deterministic sub-flows.** Every sub-flow that can be scripted is a Python script invoked directly. Your role is only the parts that genuinely need judgment (analytical synthesis in the report).
 - **Grounded output.** When producing narrative, every claim cites a concrete artifact — a screenshot path, a trace span id, or a manifest field.
+- **Structural anti-hallucination.** Hallucination in the analytical narrative is blocked by structure, not by prompting. Every observation in a `CaseNarrative` declares its citations as artifact paths; the citation validator rejects narratives whose paths do not resolve to real files under the bound case directory. The renderer rejects narratives whose `case_id` does not match the score they are embedded in.
