@@ -22,7 +22,9 @@
 
 #### Step 1: Clone this repository
 
-#### Step 2: 
+#### Step 2: Set-up [Claude Code](https://code.claude.com/docs/en/vs-code) on VSC
+
+#### Step 3: 
 
 ```
 > /onboard-evaluate-agent          ← answer a few questions, get an agent.yaml manifest, this describes the configuration for the eval run including the conversation trajectories that will/should be tested.
