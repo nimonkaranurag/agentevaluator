@@ -4,8 +4,18 @@ Render a CaseScore as a citation-grounded Markdown narrative.
 
 from __future__ import annotations
 
+from evaluate_agent.case_narrative import (
+    CaseNarrative,
+    verify_narrative_against_score,
+)
 from evaluate_agent.common.errors.report import (
     UnresolvedCitationError,
+)
+from evaluate_agent.report.common.citation_validator import (
+    validate_citations,
+)
+from evaluate_agent.report.renderers.case_narrative import (
+    compose_case_narrative_section,
 )
 from evaluate_agent.scoring import (
     AssertionFailed,
@@ -19,24 +29,31 @@ from evaluate_agent.scoring.outcomes import (
     ObservabilitySourceMissing,
 )
 
-from evaluate_agent.report.common.citation_validator import (
-    validate_citations,
-)
-
 
 def render_case_score_markdown(
     score: CaseScore,
+    *,
+    narrative: CaseNarrative | None = None,
 ) -> str:
     result = validate_citations(score)
     if not result.is_valid:
         raise UnresolvedCitationError(result.failures)
-    return compose_case_section(score, heading_level=1)
+    if narrative is not None:
+        verify_narrative_against_score(
+            narrative, score=score
+        )
+    return compose_case_section(
+        score,
+        heading_level=1,
+        narrative=narrative,
+    )
 
 
 def compose_case_section(
     score: CaseScore,
     *,
     heading_level: int,
+    narrative: CaseNarrative | None = None,
 ) -> str:
     if not 1 <= heading_level <= 6:
         raise ValueError(
@@ -44,6 +61,25 @@ def compose_case_section(
             f"inclusive (Markdown ATX heading depth); "
             f"got {heading_level}"
         )
+    case_section = _compose_score_section(
+        score, heading_level=heading_level
+    )
+    if narrative is None:
+        return case_section
+    narrative_section = compose_case_narrative_section(
+        narrative,
+        heading_level=heading_level + 1,
+    )
+    return (
+        case_section.rstrip() + "\n\n" + narrative_section
+    )
+
+
+def _compose_score_section(
+    score: CaseScore,
+    *,
+    heading_level: int,
+) -> str:
     h = "#" * heading_level
     summary = _case_summary_line(score)
     lines = [

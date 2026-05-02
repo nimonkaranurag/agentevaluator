@@ -13,8 +13,10 @@ from .common import (
     validate_citations,
 )
 from .renderers import (
+    compose_case_narrative_section,
     compose_case_section,
     render_agent_score_markdown,
+    render_case_narrative_section,
     render_case_score_markdown,
 )
 
@@ -23,8 +25,10 @@ __all__ = [
     "CitationValidationResult",
     "CitedArtifactKind",
     "UnresolvedCitationError",
+    "compose_case_narrative_section",
     "compose_case_section",
     "render_agent_score_markdown",
+    "render_case_narrative_section",
     "render_case_score_markdown",
     "validate_citations",
 ]
