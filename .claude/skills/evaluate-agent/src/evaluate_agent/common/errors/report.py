@@ -53,10 +53,12 @@ class UnresolvedCitationError(Exception):
             "against its current location and "
             "re-invoke render_report.py.\n"
             "  (3) If the run directory was deleted, "
-            "re-run open_agent.py (single case) or "
-            "the swarm plan's driver_invocation "
-            "entries (whole agent) to regenerate the "
-            "artifacts, then re-score and re-render."
+            "re-drive the case (single case) or "
+            "re-dispatch sub-agents for every directive "
+            "in the swarm plan (whole agent) so the "
+            "Playwright MCP captures land back at the "
+            "expected paths, then re-score and "
+            "re-render."
         )
         return "\n".join(lines)
 

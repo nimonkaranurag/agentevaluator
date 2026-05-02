@@ -1,0 +1,36 @@
+{
+  "case_id": "unknown_employee_alias",
+  "summary": "The agent gracefully declined an out-of-directory alias by surfacing a structured 'not registered' error rather than fabricating a leave balance, satisfying the final_response_contains assertion. This is the desirable failure mode for an unknown-alias scenario. The supporting must_call lookup_employee_record assertion (the agent should have at least attempted the lookup) and the must_not_call assertions for list_paid_leave_days and list_direct_reports (the agent must NOT have called those after the lookup failed) are inconclusive because no observability logs were fetched. The screenshot shows only one reasoning step, which is consistent with an early exit on a failed lookup, but cannot substitute for the structured tool_calls.jsonl the scoring layer reads.",
+  "observations": [
+    {
+      "kind": "success_mode",
+      "claim": "The post-submit DOM contains the visible reply \"Error: alias 'mira.unknown' is not registered in the directory.\", satisfying the final_response_contains assertion and demonstrating refusal-rather-than-hallucinate behavior on the unknown alias.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/dom/step-002-after_submit.html",
+          "locator": "character offset 773 in extracted visible text"
+        }
+      ]
+    },
+    {
+      "kind": "behavior",
+      "claim": "The post-submit screenshot shows only a single reasoning step before the error message, consistent with an early-exit on a failed employee-record lookup rather than a continued multi-tool plan.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/step-002-after_submit.png",
+          "locator": "Show Reasoning panel — single Step 1"
+        }
+      ]
+    },
+    {
+      "kind": "failure_mode",
+      "claim": "must_call lookup_employee_record and must_not_call (list_paid_leave_days, list_direct_reports) resolved to inconclusive because the captured DOM cannot prove which tools were or were not invoked; resolution requires the trace/observability/tool_calls.jsonl that LangFuse fetch would have produced.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/step-001-landing.png",
+          "locator": "landing state baseline"
+        }
+      ]
+    }
+  ]
+}

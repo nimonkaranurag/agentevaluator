@@ -1,0 +1,36 @@
+{
+  "case_id": "manager_direct_reports",
+  "summary": "The agent identified both expected direct reports of sam.cole (alex.river and jordan.kim), satisfying the final_response_contains assertion against the post-submit DOM. The supporting tool-use assertions (must_call lookup_employee_record, must_call list_direct_reports, must_not_call list_paid_leave_days) and the max_steps bound are inconclusive because LangFuse observability was not fetched, so the underlying tool-call sequence cannot be verified from the captured DOM alone.",
+  "observations": [
+    {
+      "kind": "success_mode",
+      "claim": "The post-submit DOM contains the visible reply 'The direct reports of sam.cole are alex.river and jordan.kim.', satisfying the final_response_contains assertion.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/dom/step-002-after_submit.html",
+          "locator": "character offset 796 in extracted visible text"
+        }
+      ]
+    },
+    {
+      "kind": "behavior",
+      "claim": "The post-submit screenshot shows a Step 1 / Step 2 reasoning trail above the response, consistent with the agent first looking up sam.cole and then enumerating their direct reports.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/step-002-after_submit.png",
+          "locator": "Show Reasoning panel"
+        }
+      ]
+    },
+    {
+      "kind": "failure_mode",
+      "claim": "All four tool-use and step-count assertions resolved to inconclusive because the trace/observability/ directory was not populated for this case.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/step-001-landing.png",
+          "locator": "landing state baseline"
+        }
+      ]
+    }
+  ]
+}

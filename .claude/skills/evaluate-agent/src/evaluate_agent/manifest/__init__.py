@@ -17,7 +17,11 @@ from .discovery import (
     discover_manifests,
 )
 from .loader import load_manifest
-from .schema import AgentManifest, InteractionConfig
+from .schema import (
+    AgentManifest,
+    InteractionConfig,
+    Precondition,
+)
 
 __all__ = [
     "AgentManifest",
@@ -30,6 +34,7 @@ __all__ = [
     "ManifestNotFoundError",
     "ManifestSyntaxError",
     "ManifestValidationError",
+    "Precondition",
     "discover_manifests",
     "load_manifest",
 ]

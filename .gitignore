@@ -11,3 +11,6 @@ wheels/
 
 # Local Claude Code settings (not for version control)
 .claude/settings.local.json
+
+# misc.
+.playwright-mcp/

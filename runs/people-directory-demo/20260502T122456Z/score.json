@@ -1,0 +1,388 @@
+{
+  "agent_name": "people-directory-demo",
+  "run_id": "20260502T122456Z",
+  "runs_root": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs",
+  "manifest_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml",
+  "case_scores": [
+    {
+      "case_id": "timeoff_for_known_employee",
+      "case_dir": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee",
+      "outcomes": [
+        {
+          "outcome": "passed",
+          "assertion_kind": "final_response_contains",
+          "target": null,
+          "evidence": {
+            "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/dom/step-002-after_submit.html",
+            "detail": "matched substring at character offset 979 of extracted visible text; surrounding excerpt: 'Directory Demo 1:29 PM Show Reasoning Step 1 Step 2 alex.river took time off on 20260118 between 2026-01-01 and 2026-03-31. Good response Bad response Copy Additional f'"
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "lookup_employee_record",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "list_paid_leave_days",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_not_call",
+          "target": "list_direct_reports",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "max_steps",
+          "target": null,
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "step_count",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/observability/step_count.json",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "timeoff_with_multiple_days_in_range",
+      "case_dir": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range",
+      "outcomes": [
+        {
+          "outcome": "passed",
+          "assertion_kind": "final_response_contains",
+          "target": null,
+          "evidence": {
+            "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/dom/step-002-after_submit.html",
+            "detail": "matched substring at character offset 1041 of extracted visible text; surrounding excerpt: 'f between 2026-01-01 and 2026-04-30 was on the following days: [\\\\\"20260218\\\\\", \\\\\"20260301\\\\\"]. Good response Bad response Copy Additional feedback What makes you give thi'"
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "lookup_employee_record",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "list_paid_leave_days",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_not_call",
+          "target": "list_direct_reports",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "max_steps",
+          "target": null,
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "step_count",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/observability/step_count.json",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "manager_direct_reports",
+      "case_dir": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports",
+      "outcomes": [
+        {
+          "outcome": "passed",
+          "assertion_kind": "final_response_contains",
+          "target": null,
+          "evidence": {
+            "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/dom/step-002-after_submit.html",
+            "detail": "matched substring at character offset 796 of extracted visible text; surrounding excerpt: 'ry Demo 1:29 PM Show Reasoning Step 1 Step 2 The direct reports of sam.cole are alex.river and jordan.kim. Good response Bad response Copy Additional feedback What makes '"
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "lookup_employee_record",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "list_direct_reports",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_not_call",
+          "target": "list_paid_leave_days",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "max_steps",
+          "target": null,
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "step_count",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_direct_reports/trace/observability/step_count.json",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "manager_team_timeoff_fanout",
+      "case_dir": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout",
+      "outcomes": [
+        {
+          "outcome": "passed",
+          "assertion_kind": "final_response_contains",
+          "target": null,
+          "evidence": {
+            "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout/trace/dom/step-002-after_submit.html",
+            "detail": "matched substring at character offset 1020 of extracted visible text; surrounding excerpt: 'Reasoning Step 1 Step 2 Step 3 Step 4 Step 5 Step 6 Alex.river took time off on 20260118 and Jordan.kim took time off on 20260218 and 20260301. Good response Bad respon'"
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "lookup_employee_record",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "list_direct_reports",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "list_paid_leave_days",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "max_steps",
+          "target": null,
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "step_count",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/manager_team_timeoff_fanout/trace/observability/step_count.json",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "unknown_employee_alias",
+      "case_dir": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias",
+      "outcomes": [
+        {
+          "outcome": "passed",
+          "assertion_kind": "final_response_contains",
+          "target": null,
+          "evidence": {
+            "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/dom/step-002-after_submit.html",
+            "detail": "matched substring at character offset 773 of extracted visible text; surrounding excerpt: \"ple Directory Demo 1:27 PM Show Reasoning Step 1 Error: alias 'mira.unknown' is not registered in the directory. Good response Bad response Copy Additional feedback What make\""
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_call",
+          "target": "lookup_employee_record",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_not_call",
+          "target": "list_paid_leave_days",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "must_not_call",
+          "target": "list_direct_reports",
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "tool_call_log",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/observability/tool_calls.jsonl",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        },
+        {
+          "outcome": "inconclusive",
+          "assertion_kind": "max_steps",
+          "target": null,
+          "reason": {
+            "kind": "observability_source_missing",
+            "needed_evidence": "step_count",
+            "expected_artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/unknown_employee_alias/trace/observability/step_count.json",
+            "recovery": "To proceed: declare an observability source under manifest.observability (langfuse for tool_call_log and routing_decision_log; otel for step_count) and confirm the agent under evaluation emits the corresponding spans. Land the structured log at the expected_artifact_path. Re-run the case with --submit and re-score."
+          }
+        }
+      ]
+    }
+  ],
+  "rollup": {
+    "total_assertions": 25,
+    "passed": 5,
+    "failed": 0,
+    "inconclusive": 20,
+    "by_assertion_kind": [
+      {
+        "assertion_kind": "final_response_contains",
+        "total": 5,
+        "passed": 5,
+        "failed": 0,
+        "inconclusive": 0
+      },
+      {
+        "assertion_kind": "must_call",
+        "total": 10,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 10
+      },
+      {
+        "assertion_kind": "must_not_call",
+        "total": 5,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 5
+      },
+      {
+        "assertion_kind": "max_steps",
+        "total": 5,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 5
+      }
+    ],
+    "by_target": [
+      {
+        "assertion_kind": "must_call",
+        "target": "list_direct_reports",
+        "total": 2,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 2
+      },
+      {
+        "assertion_kind": "must_call",
+        "target": "list_paid_leave_days",
+        "total": 3,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 3
+      },
+      {
+        "assertion_kind": "must_call",
+        "target": "lookup_employee_record",
+        "total": 5,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 5
+      },
+      {
+        "assertion_kind": "must_not_call",
+        "target": "list_direct_reports",
+        "total": 3,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 3
+      },
+      {
+        "assertion_kind": "must_not_call",
+        "target": "list_paid_leave_days",
+        "total": 2,
+        "passed": 0,
+        "failed": 0,
+        "inconclusive": 2
+      }
+    ],
+    "cases": {
+      "total": 5,
+      "fully_passed": 0,
+      "with_any_failure": 0,
+      "with_any_inconclusive": 5,
+      "with_no_assertions": 0
+    }
+  }
+}

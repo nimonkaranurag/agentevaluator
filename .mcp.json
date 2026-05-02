@@ -1,0 +1,37 @@
+{
+  "_comment": "Pool of 8 Playwright MCP server instances. Each slot spawns its own Node process with its own Chromium browser, so the swarm can dispatch up to 8 sub-agents in parallel and each gets a fully isolated browser. Bump the slot count by adding more `playwright-pool-N` entries below if you routinely evaluate manifests with > 8 cases. Each idle slot is a sleeping Node process; Chromium is launched lazily on first navigate.",
+  "mcpServers": {
+    "playwright-pool-0": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-1": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-2": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-3": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-4": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-5": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-6": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    },
+    "playwright-pool-7": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--isolated"]
+    }
+  }
+}

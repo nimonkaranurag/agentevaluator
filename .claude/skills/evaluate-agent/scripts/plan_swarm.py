@@ -6,10 +6,13 @@
 """
 Expand a validated manifest into a deterministic per-case fan-out plan.
 
-Emits a JSON object to stdout describing every case the orchestrator must
-dispatch. Each entry is self-contained: an absolute driver script path plus
-the argv that drives one case under a shared run directory. The orchestrator
-fans the entries out to N Claude sub-agents in parallel.
+Emits a JSON SwarmPlan to stdout. Each directive in plan.directives is a
+self-contained brief for one Claude sub-agent: the URL to navigate to,
+preconditions, the case input, and the absolute paths the sub-agent
+writes its landing + post-submit screenshots and DOM snapshots to. Every
+directive shares the same run_id so all sub-agents land artifacts in
+one run directory. The orchestrator fans the directives out in a single
+message so each sub-agent gets its own isolated Playwright MCP browser.
 
 Exits 0 on success; 1 on any manifest load or validation error
 (printed to stderr).

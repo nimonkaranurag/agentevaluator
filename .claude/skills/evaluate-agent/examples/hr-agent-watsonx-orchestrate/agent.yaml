@@ -1,0 +1,127 @@
+# Agentevaluator manifest for the People Directory demo agent.
+#
+# The agent under evaluation is the agentevaluator-shipped sample at
+# _resources/agents/people_directory_agent.yaml, backed by the native python
+# toolkit at _resources/tools/people_directory_tools.py. Import both into a
+# running watsonx Orchestrate instance with:
+#
+#   ./_resources/import_all.sh
+#
+# Then start the chat UI (`orchestrate chat start`, served at
+# http://localhost:3000) and pick `people_directory_agent` from the agent
+# dropdown. With both in place, the cases below drive the agent end to end.
+#
+# Fixture summary (encoded in _resources/tools/people_directory_tools.py):
+#   alex.river  -> EMP-1042; leave: ["20260118"]
+#   jordan.kim  -> EMP-1043; leave: ["20260218", "20260301"]
+#   sam.cole    -> EMP-1099; leave: ["20260205"]; reports: alex.river, jordan.kim
+#
+# To resolve the four observability-driven assertions (must_call,
+# must_not_call, must_route_to, max_steps) into passed/failed, instrument the
+# agent's tool invocations into LangFuse with `session_id == case.id` per
+# call and run scripts/fetch_observability.py after the driver step
+# (see SKILL.md "Fetch upstream observability").
+
+name: people-directory-demo
+description: >
+  Watsonx Orchestrate native-Python People Directory demo agent. Exercises
+  alias -> employee_id resolution, paid-leave-day lookup, and manager ->
+  direct-reports fan-out against a deterministic in-memory directory.
+
+access:
+  url: http://localhost:3000
+
+interaction:
+  # The Orchestrate chat UI requires the user to pick an agent from a
+  # dropdown before the chat input is bound to that agent. Without this
+  # precondition the driver would type case input into whatever agent the
+  # dropdown last had selected (often `AskOrchestrate`) and silently
+  # corrupt every case.
+  preconditions:
+    - action: select
+      selector: "#selected-agent-dropdown"
+      value: people_directory_agent
+  # The Orchestrate chat UI ships a Tiptap (ProseMirror) contenteditable
+  # editor instead of a <textarea>. The driver's heuristic fallback would
+  # miss this element, so the selector is declared explicitly.
+  input_selector: "[contenteditable='true']"
+  response_wait_ms: 8000
+
+# Observability is supplied by orchestrate's built-in LangFuse integration.
+# Start the dev server with:
+#
+#   orchestrate server start --with-langfuse
+#
+# That brings up a local Langfuse at http://localhost:3010 (creds:
+# orchestrate@ibm.com / orchestrate). After logging in, generate an API key
+# pair from Settings -> API Keys and export them as the env-var names below
+# so fetch_observability.py can authenticate when querying the local host.
+# Orchestrate auto-instruments tool calls / agent decisions / generations
+# emitted by people_directory_agent — no SDK wiring lives in the toolkit.
+observability:
+  langfuse:
+    host: http://localhost:3010
+    public_key_env: LANGFUSE_PUBLIC_KEY
+    secret_key_env: LANGFUSE_SECRET_KEY
+
+tools_catalog:
+  - lookup_employee_record
+  - list_paid_leave_days
+  - list_direct_reports
+
+cases:
+  - id: timeoff_for_known_employee
+    input: "What time off did alex.river take between 2026-01-01 and 2026-03-31?"
+    assertions:
+      must_call:
+        - lookup_employee_record
+        - list_paid_leave_days
+      must_not_call:
+        - list_direct_reports
+      max_steps: 4
+      final_response_contains: "20260118"
+
+  - id: timeoff_with_multiple_days_in_range
+    input: "Show me jordan.kim's time off between 2026-01-01 and 2026-04-30."
+    assertions:
+      must_call:
+        - lookup_employee_record
+        - list_paid_leave_days
+      must_not_call:
+        - list_direct_reports
+      max_steps: 4
+      final_response_contains: "20260301"
+
+  - id: manager_direct_reports
+    input: "Who reports directly to sam.cole?"
+    assertions:
+      must_call:
+        - lookup_employee_record
+        - list_direct_reports
+      must_not_call:
+        - list_paid_leave_days
+      max_steps: 4
+      final_response_contains: "alex.river"
+
+  - id: manager_team_timeoff_fanout
+    input: >
+      sam.cole here. Can you check the time off for everyone reporting to me
+      between 2026-01-01 and 2026-06-30?
+    assertions:
+      must_call:
+        - lookup_employee_record
+        - list_direct_reports
+        - list_paid_leave_days
+      max_steps: 10
+      final_response_contains: "20260118"
+
+  - id: unknown_employee_alias
+    input: "What's mira.unknown's paid leave this quarter?"
+    assertions:
+      must_call:
+        - lookup_employee_record
+      must_not_call:
+        - list_paid_leave_days
+        - list_direct_reports
+      max_steps: 3
+      final_response_contains: "not registered"
