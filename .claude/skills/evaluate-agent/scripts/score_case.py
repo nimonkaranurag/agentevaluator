@@ -69,8 +69,9 @@ def _parse_args(
         required=True,
         type=Path,
         help=(
-            "Absolute path to the case directory written "
-            "by open_agent.py "
+            "Absolute path to the case directory "
+            "written by the per-case driving "
+            "procedure in SKILL.md "
             "(<runs-root>/<agent>/<run-id>/<case-id>). "
             "Outcomes cite artifacts under this path."
         ),
@@ -113,13 +114,17 @@ def main(argv: list[str] | None = None) -> int:
             f"Case directory does not exist or is not "
             f"a directory: {case_dir}\n"
             f"To proceed:\n"
-            f"  (1) Confirm the path matches the "
-            f"successful open_agent.py invocation's "
-            f"summary block (the run_dir / case_id "
-            f"row).\n"
-            f"  (2) Run open_agent.py with --submit "
-            f"against this manifest and case to capture "
-            f"artifacts, or re-invoke score_case.py "
+            f"  (1) Confirm the path matches the case "
+            f"directory the per-case driving procedure "
+            f"in SKILL.md wrote, namely "
+            f"<runs_root>/<agent>/<run_id>/<case_id>/. "
+            f"When plan_swarm.py was used, the "
+            f"directive's case_dir field is the "
+            f"authoritative path.\n"
+            f"  (2) Re-execute the per-case driving "
+            f"procedure (SKILL.md) against this manifest "
+            f"and case to capture artifacts under the "
+            f"case directory, or re-invoke score_case.py "
             f"with a corrected --case-dir path.",
             file=sys.stderr,
         )

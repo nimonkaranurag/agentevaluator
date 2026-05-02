@@ -14,6 +14,8 @@ from .log_resolvers import (
     tool_call_log_path,
 )
 from .other_resolvers import (
+    DOM_SNAPSHOT_SIZE_CAP_BYTES,
+    OversizedDOMSnapshot,
     ResolvedDOMSnapshot,
     ResolvedStepCount,
     extract_visible_text,
@@ -24,6 +26,8 @@ from .other_resolvers import (
 )
 
 __all__ = [
+    "DOM_SNAPSHOT_SIZE_CAP_BYTES",
+    "OversizedDOMSnapshot",
     "ResolvedDOMSnapshot",
     "ResolvedGenerationLog",
     "ResolvedRoutingDecisionLog",

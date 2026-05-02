@@ -11,6 +11,7 @@ from .assertion_outcomes import (
     AssertionPassed,
 )
 from .inconclusive_reasons import (
+    DOMSnapshotTooLarge,
     DOMSnapshotUnavailable,
     InconclusiveReason,
     ObservabilityLogMalformed,
@@ -24,6 +25,7 @@ __all__ = [
     "AssertionKind",
     "AssertionOutcome",
     "AssertionPassed",
+    "DOMSnapshotTooLarge",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilityLogMalformed",

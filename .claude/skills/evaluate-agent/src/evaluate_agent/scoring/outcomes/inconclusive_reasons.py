@@ -45,13 +45,85 @@ class DOMSnapshotUnavailable(StrictFrozen):
         str,
         Field(
             default=(
-                "To proceed: re-run the case with "
-                "--submit and confirm the driver reaches "
-                "the after-submit capture step. If the "
-                "driver raises before that step (typically "
-                "MissingAuthEnvVar or "
+                "To proceed: re-execute the per-case "
+                "driving procedure (SKILL.md) and "
+                "confirm the driver reaches the "
+                "after-submit capture step. If the "
+                "driver raises before that step "
+                "(typically MissingAuthEnvVar or "
                 "InputElementNotFound), address the "
                 "underlying error and re-score."
+            ),
+            min_length=1,
+            description=(
+                "Numbered next steps the caller follows "
+                "to make the assertion evaluable on a "
+                "subsequent run."
+            ),
+        ),
+    ]
+
+
+class DOMSnapshotTooLarge(StrictFrozen):
+    kind: Literal["dom_snapshot_too_large"] = (
+        "dom_snapshot_too_large"
+    )
+    artifact_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path to the captured "
+                "post-submit DOM snapshot whose size "
+                "exceeds the parser cap. Cited verbatim "
+                "so the caller can inspect the file and "
+                "decide whether to scope the capture or "
+                "raise the cap."
+            ),
+        ),
+    ]
+    size_bytes: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=("Observed file size, in bytes."),
+        ),
+    ]
+    cap_bytes: Annotated[
+        int,
+        Field(
+            ge=1,
+            description=(
+                "Inclusive byte cap the resolver "
+                "enforces. Capturing and parsing snapshots "
+                "above this size risks exhausting memory "
+                "and disk on common machines."
+            ),
+        ),
+    ]
+    recovery: Annotated[
+        str,
+        Field(
+            default=(
+                "To proceed:\n"
+                "  (1) Confirm the captured DOM at "
+                "artifact_path is the agent's actual "
+                "reply rather than an infinite-scroll "
+                "feed or a long history pane. If the "
+                "page is dominated by unrelated chrome, "
+                "re-execute the per-case driving "
+                "procedure (SKILL.md) and scope the "
+                "capture (collapse panels, target a "
+                "smaller container, or short-circuit "
+                "before reading outerHTML when the page "
+                "is visibly huge).\n"
+                "  (2) If the captured DOM legitimately "
+                "exceeds the cap and shrinking it is "
+                "not feasible, raise the cap by "
+                "setting the DOM_SNAPSHOT_SIZE_CAP_BYTES "
+                "environment variable to a value that "
+                "fits the workload before re-invoking "
+                "the scoring layer, noting the memory "
+                "and disk cost of larger captures."
             ),
             min_length=1,
             description=(
@@ -228,6 +300,7 @@ class ObservabilityLogMalformed(StrictFrozen):
 
 InconclusiveReason = Annotated[
     DOMSnapshotUnavailable
+    | DOMSnapshotTooLarge
     | ObservabilitySourceMissing
     | ObservabilityLogMalformed,
     Field(discriminator="kind"),
@@ -235,6 +308,7 @@ InconclusiveReason = Annotated[
 
 
 __all__ = [
+    "DOMSnapshotTooLarge",
     "DOMSnapshotUnavailable",
     "InconclusiveReason",
     "ObservabilityLogMalformed",

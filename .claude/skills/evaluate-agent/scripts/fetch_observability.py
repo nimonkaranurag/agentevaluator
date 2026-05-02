@@ -78,7 +78,8 @@ def _parse_args(
         type=Path,
         help=(
             "Absolute path to the case directory "
-            "written by open_agent.py "
+            "written by the per-case driving "
+            "procedure in SKILL.md "
             "(<runs-root>/<agent>/<run-id>/<case-id>). "
             "The fetched observability artifacts are "
             "written under <case-dir>/trace/"
@@ -157,6 +158,9 @@ def _print_success_block(
                 f"  routing_decisions_written: {result.routing_decision_count}",
                 f"  step_count_total: {result.step_count_total}",
                 f"  generations_written: {result.generation_count}",
+                f"  generations_with_tokens: {_format_coverage(result.generations_with_tokens, result.generation_count)}",
+                f"  generations_with_cost: {_format_coverage(result.generations_with_cost, result.generation_count)}",
+                f"  generations_with_latency: {_format_coverage(result.generations_with_latency, result.generation_count)}",
                 f"  total_tokens: {_format_optional_scalar(result.total_tokens)}",
                 f"  total_cost_usd: {_format_optional_cost(result.total_cost_usd)}",
                 f"  total_latency_ms: {_format_optional_scalar(result.total_latency_ms)}",
@@ -171,6 +175,12 @@ def _print_success_block(
 
 def _format_optional_scalar(value: int | None) -> str:
     return "unset" if value is None else str(value)
+
+
+def _format_coverage(populated: int, total: int) -> str:
+    if total == 0:
+        return "0/0"
+    return f"{populated}/{total}"
 
 
 def _format_optional_cost(value: float | None) -> str:
@@ -218,13 +228,18 @@ def main(argv: list[str] | None = None) -> int:
             f"Case directory does not exist or is not "
             f"a directory: {case_dir}\n"
             f"To proceed:\n"
-            f"  (1) Confirm the path matches the "
-            f"successful open_agent.py invocation's "
-            f"summary block (the case_dir row).\n"
-            f"  (2) Run open_agent.py with --submit "
-            f"against this manifest and case to "
-            f"capture the case directory before "
-            f"fetching upstream observability into it.",
+            f"  (1) Confirm the path matches the case "
+            f"directory the per-case driving procedure "
+            f"in SKILL.md wrote, namely "
+            f"<runs_root>/<agent>/<run_id>/<case_id>/. "
+            f"When plan_swarm.py was used, the "
+            f"directive's case_dir field is the "
+            f"authoritative path.\n"
+            f"  (2) Re-execute the per-case driving "
+            f"procedure (SKILL.md) against this manifest "
+            f"and case to capture the case directory "
+            f"before fetching upstream observability "
+            f"into it.",
             file=sys.stderr,
         )
         return 1

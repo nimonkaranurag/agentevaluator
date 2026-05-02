@@ -5,6 +5,7 @@ user-visible text in a single resolution step.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,13 @@ from evaluate_agent.artifact_layout import (
     EXPLICIT_DOM_PREFIX,
     POST_SUBMIT_LABEL,
     TRACE_SUBDIR,
+)
+
+DOM_SNAPSHOT_SIZE_CAP_BYTES = int(
+    os.environ.get(
+        "DOM_SNAPSHOT_SIZE_CAP_BYTES",
+        25 * 1024 * 1024,
+    )
 )
 
 _NON_VISIBLE_TAGS = (
@@ -51,6 +59,13 @@ class ResolvedDOMSnapshot:
     visible_text: str
 
 
+@dataclass(frozen=True)
+class OversizedDOMSnapshot:
+    path: Path
+    size_bytes: int
+    cap_bytes: int
+
+
 _FILENAME_PATTERN = re.compile(
     rf"^{re.escape(EXPLICIT_DOM_PREFIX)}-(\d+)-"
     rf"{re.escape(POST_SUBMIT_LABEL)}\."
@@ -60,7 +75,7 @@ _FILENAME_PATTERN = re.compile(
 
 def resolve_post_submit_dom_snapshot(
     case_dir: Path,
-) -> ResolvedDOMSnapshot | None:
+) -> ResolvedDOMSnapshot | OversizedDOMSnapshot | None:
     dom_dir = post_submit_dom_snapshot_dir(case_dir)
     if not dom_dir.is_dir():
         return None
@@ -72,6 +87,13 @@ def resolve_post_submit_dom_snapshot(
     if not candidates:
         return None
     latest = max(candidates, key=lambda pair: pair[0])[1]
+    size_bytes = latest.stat().st_size
+    if size_bytes > DOM_SNAPSHOT_SIZE_CAP_BYTES:
+        return OversizedDOMSnapshot(
+            path=latest,
+            size_bytes=size_bytes,
+            cap_bytes=DOM_SNAPSHOT_SIZE_CAP_BYTES,
+        )
     return ResolvedDOMSnapshot(
         path=latest,
         visible_text=extract_visible_text(
@@ -81,6 +103,8 @@ def resolve_post_submit_dom_snapshot(
 
 
 __all__ = [
+    "DOM_SNAPSHOT_SIZE_CAP_BYTES",
+    "OversizedDOMSnapshot",
     "ResolvedDOMSnapshot",
     "extract_visible_text",
     "post_submit_dom_snapshot_dir",

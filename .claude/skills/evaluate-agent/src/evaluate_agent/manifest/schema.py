@@ -26,7 +26,7 @@ Slug = Annotated[
 Identifier = Annotated[
     str,
     StringConstraints(
-        pattern=r"^[A-Za-z_][\w.\-]*$",
+        pattern=r"^[A-Za-z_][A-Za-z0-9_.\-]*$",
         min_length=1,
         max_length=128,
     ),
@@ -252,14 +252,18 @@ class InteractionConfig(StrictFrozen):
         int,
         Field(
             default=2000,
-            ge=0,
+            ge=100,
             le=120_000,
             description=(
                 "Milliseconds to wait after submitting "
                 "case.input before capturing the "
                 "post-submit screenshot. Tune up for "
                 "agents whose response takes longer to "
-                "render; tune down for fast agents."
+                "render; tune down for fast agents. "
+                "Lower bound of 100ms reserves enough "
+                "time for any real agent's first byte "
+                "of response — capturing earlier yields "
+                "an unsubmitted-state DOM."
             ),
         ),
     ]
@@ -340,6 +344,32 @@ class Case(StrictFrozen):
     assertions: Assertions = Field(
         default_factory=Assertions
     )
+
+    @model_validator(mode="after")
+    def _at_least_one_assertion(self) -> "Case":
+        a = self.assertions
+        if not (
+            a.must_call
+            or a.must_not_call
+            or a.must_route_to is not None
+            or a.max_steps is not None
+            or a.final_response_contains is not None
+            or a.max_total_tokens is not None
+            or a.max_total_cost_usd is not None
+            or a.max_latency_ms is not None
+        ):
+            raise ValueError(
+                f"case {self.id!r}: assertions block "
+                f"declares no checks. Every case must "
+                f"declare at least one assertion under "
+                f"any of must_call, must_not_call, "
+                f"must_route_to, max_steps, "
+                f"final_response_contains, "
+                f"max_total_tokens, max_total_cost_usd, "
+                f"max_latency_ms — a case with no "
+                f"checks would silently pass scoring."
+            )
+        return self
 
 
 class AgentManifest(StrictFrozen):

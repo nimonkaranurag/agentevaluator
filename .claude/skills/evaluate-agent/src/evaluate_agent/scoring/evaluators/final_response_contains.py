@@ -12,9 +12,11 @@ from evaluate_agent.scoring.outcomes import (
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
+    DOMSnapshotTooLarge,
     DOMSnapshotUnavailable,
 )
 from evaluate_agent.scoring.resolvers.other_resolvers.dom_snapshot import (  # noqa: E501
+    OversizedDOMSnapshot,
     post_submit_dom_snapshot_dir,
     resolve_post_submit_dom_snapshot,
 )
@@ -35,6 +37,15 @@ def evaluate_final_response_contains(
                 expected_artifact_dir=(
                     post_submit_dom_snapshot_dir(case_dir)
                 ),
+            ),
+        )
+    if isinstance(snapshot, OversizedDOMSnapshot):
+        return AssertionInconclusive(
+            assertion_kind="final_response_contains",
+            reason=DOMSnapshotTooLarge(
+                artifact_path=snapshot.path,
+                size_bytes=snapshot.size_bytes,
+                cap_bytes=snapshot.cap_bytes,
             ),
         )
 

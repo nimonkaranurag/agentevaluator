@@ -3,6 +3,8 @@ Resolvers for non-log artifact types (single JSON document, DOM snapshot).
 """
 
 from .dom_snapshot import (
+    DOM_SNAPSHOT_SIZE_CAP_BYTES,
+    OversizedDOMSnapshot,
     ResolvedDOMSnapshot,
     extract_visible_text,
     post_submit_dom_snapshot_dir,
@@ -15,6 +17,8 @@ from .step_count import (
 )
 
 __all__ = [
+    "DOM_SNAPSHOT_SIZE_CAP_BYTES",
+    "OversizedDOMSnapshot",
     "ResolvedDOMSnapshot",
     "ResolvedStepCount",
     "extract_visible_text",

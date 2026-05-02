@@ -44,6 +44,9 @@ class FetchedObservability:
     routing_decision_count: int
     step_count_total: int
     generation_count: int
+    generations_with_tokens: int
+    generations_with_cost: int
+    generations_with_latency: int
     total_tokens: int | None
     total_cost_usd: float | None
     total_latency_ms: int | None
@@ -111,6 +114,21 @@ def fetch_langfuse_observability(
         routing_decision_count=len(routing_decisions),
         step_count_total=step_count.total_steps,
         generation_count=len(generations),
+        generations_with_tokens=sum(
+            1
+            for g in generations
+            if g.total_tokens is not None
+        ),
+        generations_with_cost=sum(
+            1
+            for g in generations
+            if g.total_cost_usd is not None
+        ),
+        generations_with_latency=sum(
+            1
+            for g in generations
+            if g.latency_ms is not None
+        ),
         total_tokens=_optional_sum(
             g.total_tokens for g in generations
         ),
