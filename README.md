@@ -57,7 +57,7 @@ Local Langfuse UI lands at [`http://localhost:3010`](http://localhost:3010) (cre
 
 <br>
 
-![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI (basic, bare-bones integration POC)*
+![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI (basic, bare-bones integration POC)*
 
 
 
