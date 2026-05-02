@@ -7,6 +7,9 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from evaluate_agent.common.types import StrictFrozen
+from evaluate_agent.manifest.api_version import (
+    ApiVersionV1,
+)
 from evaluate_agent.manifest.security import (
     EnvVarName,
     HostPolicy,
@@ -523,7 +526,25 @@ class Case(StrictFrozen):
         return self
 
 
-class AgentManifest(StrictFrozen):
+class AgentManifestV1(StrictFrozen):
+    # apiVersion pins this model to the v1 schema. Required (no
+    # default) so a manifest that omits it is rejected by the
+    # loader rather than silently bound to v1. Camel-cased to
+    # match the established Kubernetes-style schema-versioning
+    # convention (and to signal that this is a meta-field,
+    # distinct from the snake_cased domain fields below).
+    apiVersion: Annotated[
+        ApiVersionV1,
+        Field(
+            description=(
+                "Schema version this manifest targets. "
+                "Required. Future schema versions add their "
+                "own AgentManifestV{N} variant and join the "
+                "AgentManifest discriminated union; the "
+                "loader dispatches on this field's value."
+            ),
+        ),
+    ]
     name: Slug
     # The manifest description is rendered verbatim into the
     # report's preface and into discovery-listing output, so
@@ -548,7 +569,7 @@ class AgentManifest(StrictFrozen):
     cases: list[Case] = Field(..., min_length=1)
 
     @model_validator(mode="after")
-    def _unique_case_ids(self) -> "AgentManifest":
+    def _unique_case_ids(self) -> "AgentManifestV1":
         seen: set[str] = set()
         dups: set[str] = set()
         for case in self.cases:
@@ -564,7 +585,7 @@ class AgentManifest(StrictFrozen):
     @model_validator(mode="after")
     def _assertions_reference_declared_catalog_entries(
         self,
-    ) -> "AgentManifest":
+    ) -> "AgentManifestV1":
         if self.tools_catalog:
             allowed_tools = set(self.tools_catalog)
             for case in self.cases:
@@ -592,8 +613,26 @@ class AgentManifest(StrictFrozen):
         return self
 
 
+# AgentManifest is the public type every consumer imports. Today
+# it aliases the single supported v1 model. When v2 ships, this
+# becomes
+#
+#     AgentManifest = Annotated[
+#         AgentManifestV1 | AgentManifestV2,
+#         Field(discriminator="apiVersion"),
+#     ]
+#
+# and Pydantic dispatches model_validate on the apiVersion literal.
+# Until then, the alias keeps the public surface stable while the
+# loader (not the union) hard-rejects unrecognized apiVersion
+# strings — the schema-level discriminator is reserved for the
+# moment a second variant exists.
+AgentManifest = AgentManifestV1
+
+
 __all__ = [
     "AgentManifest",
+    "AgentManifestV1",
     "Assertions",
     "Auth",
     "BasicAuth",

@@ -1,6 +1,7 @@
 # Smoke-test manifest. Points at https://example.com so the driver pipeline
 # can be exercised end-to-end without needing a real agent deployment.
 
+apiVersion: agentevaluator/v1
 name: example-com-smoke
 description: Smoke-test target for the driver pipeline.
 

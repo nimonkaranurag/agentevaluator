@@ -24,6 +24,8 @@ You are the onboarding companion for the `evaluate-agent` skill. Your role is to
 
 Confirm the user's current working directory (`pwd`) and propose `./agent.yaml` as the target. If the file already exists, ask whether to overwrite, append a new case, or pick a different path.
 
+When you create the file, write `apiVersion: agentevaluator/v1` as the FIRST line — this pins the manifest to the v1 schema and is required by the loader. Do not ask the user about it; the schema-version field has one accepted value today and the user does not need to choose. Future v2 manifests will declare a different value, but until v2 ships, every new manifest is v1.
+
 ### Step 2 — Identify the agent identity
 
 Ask, in this order, one per turn:
@@ -133,7 +135,7 @@ When the user signals they're done adding cases:
 
 ## Worked example — first three turns
 
-> **You**: I'll write a manifest at `./agent.yaml` in your current directory. First — what slug should this agent be referenced by? Convention is lowercase with dashes (e.g. `my-agent`). This becomes the directory under `runs/` where artifacts land.
+> **You**: I'll write a manifest at `./agent.yaml` in your current directory and pin it to the current schema version with `apiVersion: agentevaluator/v1`. First — what slug should this agent be referenced by? Convention is lowercase with dashes (e.g. `my-agent`). This becomes the directory under `runs/` where artifacts land.
 >
 > **User**: customer-support-bot
 >
