@@ -20,11 +20,15 @@ from evaluate_agent.report.common.citation_validator import (
     validate_citations,
 )
 from evaluate_agent.scoring import AgentScore
+from evaluate_agent.scoring.scores.baseline_diff import (
+    BaselineDiff,
+)
 from evaluate_agent.scoring.scores.rollups import (
     AgentRollup,
     CaseOutcomeRollup,
 )
 
+from .baseline_diff import render_baseline_diff_section
 from .case_score import compose_case_section
 
 
@@ -32,6 +36,7 @@ def render_agent_score_markdown(
     score: AgentScore,
     *,
     narratives: Mapping[str, CaseNarrative] | None = None,
+    baseline_diff: BaselineDiff | None = None,
 ) -> str:
     result = validate_citations(score)
     if not result.is_valid:
@@ -39,12 +44,22 @@ def render_agent_score_markdown(
     bound = _bind_narratives_to_cases(
         score, narratives or {}
     )
+    diff = (
+        baseline_diff
+        if baseline_diff is not None
+        else score.baseline_diff
+    )
     sections = [
         _render_header(score),
         _render_assertion_summary(score.rollup),
         _render_by_assertion_kind(score.rollup),
         _render_by_target(score.rollup),
         _render_by_case(score.rollup.cases),
+        (
+            render_baseline_diff_section(diff)
+            if diff is not None
+            else ""
+        ),
         _render_per_case_detail(score, bound),
     ]
     return (

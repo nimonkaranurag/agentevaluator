@@ -18,9 +18,18 @@ observability schema (TOOL -> tool_calls.jsonl, AGENT ->
 routing_decisions.jsonl, GENERATION count -> step_count.json), and
 persists them under <case-dir>/trace/observability/.
 
+Diagnostic logging (errors, warnings) is emitted on stderr in either
+text or JSON form, controlled by --log-format.
+
 Exits 0 once the fetch completes (regardless of trace or observation
 count). Exits 1 on any manifest, case-selection, case-directory,
-credential, or LangFuse query error printed to stderr.
+credential, or LangFuse query error (logged to stderr with the
+actionable recovery procedure embedded in the message).
+
+When --metrics PATH is supplied, the script writes a single JSON
+document to PATH at completion that records per-phase wall-clock timing
+(load_manifest, fetch_observability), the script's exit status, and
+contextual identifiers (manifest_path, case_id, case_dir).
 """
 
 from __future__ import annotations
@@ -37,6 +46,13 @@ sys.path.insert(0, str(_SRC_DIR))
 from evaluate_agent.common.errors.observability_fetcher import (  # noqa: E402
     LangfuseSourceNotDeclared,
     ObservabilityFetcherError,
+)
+from evaluate_agent.common.phase_metrics import (  # noqa: E402
+    MetricsCollector,
+)
+from evaluate_agent.common.script_logging import (  # noqa: E402
+    LOG_FORMATS,
+    configure_script_logging,
 )
 from evaluate_agent.manifest import (  # noqa: E402
     ManifestError,
@@ -118,6 +134,26 @@ def _parse_args(
             "(inclusive). Default: no upper bound."
         ),
     )
+    parser.add_argument(
+        "--log-format",
+        choices=LOG_FORMATS,
+        default="text",
+        help=(
+            "Format for diagnostic log records on "
+            "stderr. Default: text. CI consumers "
+            "should select json."
+        ),
+    )
+    parser.add_argument(
+        "--metrics",
+        type=Path,
+        default=None,
+        help=(
+            "Path to write the per-phase timing JSON "
+            "document to at script completion. Omit "
+            "to skip metrics emission."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -197,87 +233,138 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(
         sys.argv[1:] if argv is None else argv
     )
-    try:
-        manifest = load_manifest(args.path)
-    except ManifestError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    case = next(
-        (c for c in manifest.cases if c.id == args.case),
-        None,
+    logger = configure_script_logging(
+        script_name="fetch_observability",
+        log_format=args.log_format,
     )
-    if case is None:
-        declared_ids = ", ".join(
-            c.id for c in manifest.cases
-        )
-        print(
-            f"Case {args.case!r} is not declared in "
-            f"manifest {args.path}.\n"
-            f"To proceed: re-invoke with --case set to "
-            f"one of the declared case ids, or add the "
-            f"case to the manifest's cases: list.\n"
-            f"Declared case ids: {declared_ids}",
-            file=sys.stderr,
-        )
-        return 1
-
-    case_dir = args.case_dir.resolve()
-    if not case_dir.is_dir():
-        print(
-            f"Case directory does not exist or is not "
-            f"a directory: {case_dir}\n"
-            f"To proceed:\n"
-            f"  (1) Confirm the path matches the case "
-            f"directory the per-case driving procedure "
-            f"in SKILL.md wrote, namely "
-            f"<runs_root>/<agent>/<run_id>/<case_id>/. "
-            f"When plan_swarm.py was used, the "
-            f"directive's case_dir field is the "
-            f"authoritative path.\n"
-            f"  (2) Re-execute the per-case driving "
-            f"procedure (SKILL.md) against this manifest "
-            f"and case to capture the case directory "
-            f"before fetching upstream observability "
-            f"into it.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if manifest.observability.langfuse is None:
-        print(
-            str(LangfuseSourceNotDeclared(args.path)),
-            file=sys.stderr,
-        )
-        return 1
-
-    session_id = (
-        args.session_id
-        if args.session_id is not None
-        else case.id
+    metrics = MetricsCollector(
+        script_name="fetch_observability"
     )
-
+    metrics.set_context(
+        manifest_path=str(args.path),
+        case_id=args.case,
+        case_dir=str(args.case_dir),
+    )
+    exit_code = 1
     try:
-        result = fetch_langfuse_observability(
+        try:
+            with metrics.phase("load_manifest"):
+                manifest = load_manifest(args.path)
+        except ManifestError as exc:
+            logger.error(
+                "Manifest failed to load: %s",
+                exc,
+                extra={"manifest_path": str(args.path)},
+            )
+            return 1
+
+        case = next(
+            (
+                c
+                for c in manifest.cases
+                if c.id == args.case
+            ),
+            None,
+        )
+        if case is None:
+            declared_ids = ", ".join(
+                c.id for c in manifest.cases
+            )
+            logger.error(
+                "Case %r is not declared in manifest "
+                "%s.\n"
+                "To proceed: re-invoke with --case set "
+                "to one of the declared case ids, or "
+                "add the case to the manifest's "
+                "cases: list.\n"
+                "Declared case ids: %s",
+                args.case,
+                args.path,
+                declared_ids,
+                extra={
+                    "manifest_path": str(args.path),
+                    "case_id": args.case,
+                },
+            )
+            return 1
+
+        case_dir = args.case_dir.resolve()
+        if not case_dir.is_dir():
+            logger.error(
+                "Case directory does not exist or is "
+                "not a directory: %s\n"
+                "To proceed:\n"
+                "  (1) Confirm the path matches the "
+                "case directory the per-case driving "
+                "procedure in SKILL.md wrote, namely "
+                "<runs_root>/<agent>/<run_id>/"
+                "<case_id>/. When plan_swarm.py was "
+                "used, the directive's case_dir field "
+                "is the authoritative path.\n"
+                "  (2) Re-execute the per-case driving "
+                "procedure (SKILL.md) against this "
+                "manifest and case to capture the case "
+                "directory before fetching upstream "
+                "observability into it.",
+                case_dir,
+                extra={
+                    "case_id": args.case,
+                    "case_dir": str(case_dir),
+                },
+            )
+            return 1
+
+        if manifest.observability.langfuse is None:
+            logger.error(
+                "%s",
+                LangfuseSourceNotDeclared(args.path),
+                extra={"manifest_path": str(args.path)},
+            )
+            return 1
+
+        session_id = (
+            args.session_id
+            if args.session_id is not None
+            else case.id
+        )
+
+        try:
+            with metrics.phase("fetch_observability"):
+                result = fetch_langfuse_observability(
+                    case_dir=case_dir,
+                    source=manifest.observability.langfuse,
+                    session_id=session_id,
+                    since=args.since,
+                    until=args.until,
+                )
+        except ObservabilityFetcherError as exc:
+            logger.error(
+                "%s",
+                exc,
+                extra={
+                    "case_id": args.case,
+                    "case_dir": str(case_dir),
+                },
+            )
+            return 1
+
+        _print_success_block(
+            manifest_path=args.path,
+            case_id=case.id,
             case_dir=case_dir,
-            source=manifest.observability.langfuse,
-            session_id=session_id,
             since=args.since,
             until=args.until,
+            result=result,
         )
-    except ObservabilityFetcherError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    _print_success_block(
-        manifest_path=args.path,
-        case_id=case.id,
-        case_dir=case_dir,
-        since=args.since,
-        until=args.until,
-        result=result,
-    )
-    return 0
+        exit_code = 0
+        return exit_code
+    finally:
+        metrics.emit_if_configured(
+            args.metrics,
+            exit_status=(
+                "success" if exit_code == 0 else "error"
+            ),
+        )
 
 
 if __name__ == "__main__":

@@ -7,6 +7,35 @@ from __future__ import annotations
 from pathlib import Path
 
 
+class BaselineAgentMismatchError(ValueError):
+    def __init__(
+        self,
+        *,
+        baseline_agent_name: str,
+        current_agent_name: str,
+    ) -> None:
+        self.baseline_agent_name = baseline_agent_name
+        self.current_agent_name = current_agent_name
+        super().__init__(
+            f"Cannot diff scores from different "
+            f"agents: baseline.agent_name="
+            f"{baseline_agent_name!r}, "
+            f"current.agent_name="
+            f"{current_agent_name!r}.\n"
+            f"To proceed:\n"
+            f"  (1) Confirm the baseline file is the "
+            f"prior AgentScore for the same agent the "
+            f"current run scored. The baseline path "
+            f"should point at a JSON file that "
+            f"score_agent.py emitted for "
+            f"{current_agent_name!r}.\n"
+            f"  (2) Re-invoke with --baseline pointing "
+            f"at the prior AgentScore for "
+            f"{current_agent_name!r}, or omit "
+            f"--baseline to skip the diff."
+        )
+
+
 class ObservabilityLogMalformedError(ValueError):
     def __init__(
         self,
@@ -50,4 +79,7 @@ class ObservabilityLogMalformedError(ValueError):
         )
 
 
-__all__ = ["ObservabilityLogMalformedError"]
+__all__ = [
+    "BaselineAgentMismatchError",
+    "ObservabilityLogMalformedError",
+]

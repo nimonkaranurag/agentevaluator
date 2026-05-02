@@ -13,6 +13,9 @@ from evaluate_agent.artifact_layout import parse_run_id
 from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.schema import Slug
 from evaluate_agent.scoring.outcomes import AssertionKind
+from evaluate_agent.scoring.scores.baseline_diff import (
+    BaselineDiff,
+)
 from evaluate_agent.scoring.scores.case_score import (
     CaseScore,
 )
@@ -103,6 +106,19 @@ class AgentScore(StrictFrozen):
             ),
         ),
     ]
+    baseline_diff: Annotated[
+        BaselineDiff | None,
+        Field(
+            default=None,
+            description=(
+                "Per-assertion delta against a prior "
+                "AgentScore the caller named via "
+                "score_agent.py --baseline. None when "
+                "the score was composed without a "
+                "baseline reference."
+            ),
+        ),
+    ]
 
     @model_validator(mode="after")
     def _case_ids_unique(self) -> "AgentScore":
@@ -127,6 +143,7 @@ def score_agent(
     run_id: str,
     runs_root: Path,
     manifest_path: Path,
+    baseline_diff: BaselineDiff | None = None,
 ) -> AgentScore:
     rollup = _compose_rollup(case_scores)
     return AgentScore(
@@ -136,6 +153,7 @@ def score_agent(
         manifest_path=manifest_path,
         case_scores=case_scores,
         rollup=rollup,
+        baseline_diff=baseline_diff,
     )
 
 
