@@ -14,6 +14,7 @@ from evaluate_agent.artifact_layout import (
     STEP_COUNT_FILENAME,
     TOOL_CALL_LOG_FILENAME,
     TRACE_SUBDIR,
+    create_owner_only_dir,
 )
 from evaluate_agent.scoring.observability.schema import (
     Generation,
@@ -44,7 +45,9 @@ def write_observability_artifacts(
     generations: tuple[Generation, ...],
 ) -> WrittenObservabilityArtifacts:
     log_dir = observability_log_dir_for(case_dir)
-    log_dir.mkdir(parents=True, exist_ok=True)
+    create_owner_only_dir(case_dir.parent)
+    create_owner_only_dir(case_dir)
+    create_owner_only_dir(log_dir)
 
     tool_calls_path = log_dir / TOOL_CALL_LOG_FILENAME
     routing_decisions_path = (

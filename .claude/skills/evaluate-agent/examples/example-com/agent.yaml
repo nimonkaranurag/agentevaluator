@@ -10,4 +10,5 @@ access:
 cases:
   - id: landing
     input: "smoke test input for the driver pipeline"
-    assertions: {}
+    assertions:
+      final_response_contains: "Example Domain"

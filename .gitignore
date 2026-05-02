@@ -14,3 +14,9 @@ wheels/
 
 # misc.
 .playwright-mcp/
+
+# Captured run artifacts; may contain session tokens or PII from the evaluated UI.
+runs/
+
+# Local planning notes (not for version control)
+REMEDIATION_PLAN.md

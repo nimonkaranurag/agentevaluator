@@ -25,6 +25,7 @@ from evaluate_agent.scoring import (
     CaseScore,
 )
 from evaluate_agent.scoring.outcomes import (
+    DOMSnapshotTooLarge,
     DOMSnapshotUnavailable,
     ObservabilitySourceMissing,
 )
@@ -180,6 +181,15 @@ def _render_inconclusive(
         lines.append(
             f"  - Expected artifact dir: "
             f"`{reason.expected_artifact_dir}`"
+        )
+    elif isinstance(reason, DOMSnapshotTooLarge):
+        lines.append(
+            f"  - Artifact path: "
+            f"`{reason.artifact_path}`"
+        )
+        lines.append(
+            f"  - Size: {reason.size_bytes} bytes "
+            f"(cap {reason.cap_bytes} bytes)"
         )
     lines.append(f"  - Recovery: {reason.recovery}")
     lines.append("")
