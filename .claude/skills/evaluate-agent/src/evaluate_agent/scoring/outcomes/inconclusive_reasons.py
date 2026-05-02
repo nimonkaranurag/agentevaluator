@@ -118,11 +118,12 @@ class DOMSnapshotTooLarge(StrictFrozen):
                 "is visibly huge).\n"
                 "  (2) If the captured DOM legitimately "
                 "exceeds the cap and shrinking it is "
-                "not feasible, raise cap_bytes in the "
-                "scoring resolver (currently constant) "
-                "to a value that fits the workload, "
-                "noting the memory/disk cost of larger "
-                "captures."
+                "not feasible, raise the cap by "
+                "setting the DOM_SNAPSHOT_SIZE_CAP_BYTES "
+                "environment variable to a value that "
+                "fits the workload before re-invoking "
+                "the scoring layer, noting the memory "
+                "and disk cost of larger captures."
             ),
             min_length=1,
             description=(

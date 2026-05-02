@@ -5,6 +5,7 @@ user-visible text in a single resolution step.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +19,12 @@ from evaluate_agent.artifact_layout import (
     TRACE_SUBDIR,
 )
 
-DOM_SNAPSHOT_SIZE_CAP_BYTES = 25 * 1024 * 1024
+DOM_SNAPSHOT_SIZE_CAP_BYTES = int(
+    os.environ.get(
+        "DOM_SNAPSHOT_SIZE_CAP_BYTES",
+        25 * 1024 * 1024,
+    )
+)
 
 _NON_VISIBLE_TAGS = (
     "script",
