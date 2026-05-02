@@ -11,6 +11,7 @@ from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.schema import (
     Precondition,
     Slug,
+    UIIntrospectionSource,
 )
 from pydantic import Field, HttpUrl
 
@@ -139,6 +140,89 @@ class CaseDirective(StrictFrozen):
                 "post-submit DOM HTML to. The scoring "
                 "layer reads this file to evaluate "
                 "final_response_contains."
+            ),
+        ),
+    ]
+    ui_introspection: Annotated[
+        UIIntrospectionSource | None,
+        Field(
+            default=None,
+            description=(
+                "Mirrors manifest.observability."
+                "ui_introspection verbatim. When set, the "
+                "sub-agent runs ui_introspection."
+                "reveal_actions AFTER submitting "
+                "case_input + waiting response_wait_ms but "
+                "BEFORE capturing the post-submit DOM, "
+                "then extracts entries described by "
+                "ui_introspection.description from the "
+                "captured DOM and writes them to "
+                "tool_call_log_path / "
+                "routing_decision_log_path / "
+                "step_count_path per ui_introspection."
+                "exposes. None means UI introspection is "
+                "not declared and only structured trace "
+                "sources (langfuse) populate the "
+                "observability logs."
+            ),
+        ),
+    ]
+    tool_call_log_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path the sub-agent writes the "
+                "extracted tool-call JSONL to when "
+                "ui_introspection is set and "
+                "ui_introspection.exposes contains "
+                "'tool_calls'. Mirrors the path the "
+                "scoring layer reads to evaluate "
+                "must_call / must_not_call."
+            ),
+        ),
+    ]
+    routing_decision_log_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path the sub-agent writes the "
+                "extracted routing-decision JSONL to when "
+                "ui_introspection is set and "
+                "ui_introspection.exposes contains "
+                "'routing_decisions'. Mirrors the path "
+                "the scoring layer reads to evaluate "
+                "must_route_to."
+            ),
+        ),
+    ]
+    step_count_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path the sub-agent writes the "
+                "extracted step-count JSON to when "
+                "ui_introspection is set and "
+                "ui_introspection.exposes contains "
+                "'step_count'. Mirrors the path the "
+                "scoring layer reads to evaluate "
+                "max_steps."
+            ),
+        ),
+    ]
+    generation_log_path: Annotated[
+        Path,
+        Field(
+            description=(
+                "Absolute path where fetch_observability."
+                "py writes the per-generation observability "
+                "log (token usage, cost, latency per LLM "
+                "generation) when manifest.observability."
+                "langfuse is declared. Read by the "
+                "max_total_tokens / max_total_cost_usd / "
+                "max_latency_ms evaluators. UI "
+                "introspection does not write to this "
+                "path — chat UIs do not expose token "
+                "counts or costs."
             ),
         ),
     ]

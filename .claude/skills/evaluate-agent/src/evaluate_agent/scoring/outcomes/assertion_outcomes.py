@@ -18,6 +18,9 @@ AssertionKind = Literal[
     "must_not_call",
     "must_route_to",
     "max_steps",
+    "max_total_tokens",
+    "max_total_cost_usd",
+    "max_latency_ms",
 ]
 
 

@@ -201,7 +201,137 @@ class StepCount(StrictFrozen):
         return self
 
 
+class Generation(StrictFrozen):
+    span_id: Annotated[
+        str,
+        Field(
+            min_length=1,
+            description=(
+                "Identifier of the span recording this "
+                "generation in the source observability "
+                "system. Cited verbatim by passed and "
+                "failed outcomes so a reader can locate "
+                "the underlying generation. Required."
+            ),
+        ),
+    ]
+    model: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "Name of the model that produced the "
+                "generation, when the source records it. "
+                "Captured for analytical context; the "
+                "scoring layer does not match against it."
+            ),
+        ),
+    ]
+    input_tokens: Annotated[
+        NonNegativeInt | None,
+        Field(
+            default=None,
+            description=(
+                "Tokens consumed by the prompt for this "
+                "generation, when the source records "
+                "usage. None when usage is not emitted "
+                "for this model / configuration."
+            ),
+        ),
+    ]
+    output_tokens: Annotated[
+        NonNegativeInt | None,
+        Field(
+            default=None,
+            description=(
+                "Tokens produced by the model for this "
+                "generation, when the source records "
+                "usage. None when usage is not emitted "
+                "for this model / configuration."
+            ),
+        ),
+    ]
+    total_tokens: Annotated[
+        NonNegativeInt | None,
+        Field(
+            default=None,
+            description=(
+                "Total tokens (input + output) for this "
+                "generation. The max_total_tokens "
+                "assertion sums this across the case's "
+                "generations."
+            ),
+        ),
+    ]
+    input_cost_usd: Annotated[
+        float | None,
+        Field(
+            default=None,
+            ge=0,
+            description=(
+                "USD cost attributed to the prompt for "
+                "this generation, when the source emits "
+                "cost details."
+            ),
+        ),
+    ]
+    output_cost_usd: Annotated[
+        float | None,
+        Field(
+            default=None,
+            ge=0,
+            description=(
+                "USD cost attributed to the completion "
+                "for this generation, when the source "
+                "emits cost details."
+            ),
+        ),
+    ]
+    total_cost_usd: Annotated[
+        float | None,
+        Field(
+            default=None,
+            ge=0,
+            description=(
+                "Total USD cost (input + output) for "
+                "this generation. The max_total_cost_usd "
+                "assertion sums this across the case's "
+                "generations."
+            ),
+        ),
+    ]
+    latency_ms: Annotated[
+        NonNegativeInt | None,
+        Field(
+            default=None,
+            description=(
+                "Wall-clock duration of the generation "
+                "in milliseconds, derived from "
+                "end_time - start_time on the source "
+                "span. The max_latency_ms assertion sums "
+                "this across the case's generations to "
+                "compare against a per-case cap."
+            ),
+        ),
+    ]
+    timestamp: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "ISO-8601 start timestamp of the "
+                "generation. Optional because not every "
+                "observability source emits a timestamp "
+                "per generation."
+            ),
+        ),
+    ]
+
+
 __all__ = [
+    "Generation",
     "RoutingDecision",
     "StepCount",
     "ToolCall",

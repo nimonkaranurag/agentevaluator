@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from evaluate_agent.scoring.observability.schema import (
+    Generation,
     RoutingDecision,
     StepCount,
     ToolCall,
@@ -113,6 +114,56 @@ def transform_observations_to_step_count(
     )
 
 
+def transform_observations_to_generations(
+    observations: Sequence[Mapping[str, Any]],
+) -> tuple[Generation, ...]:
+    entries: list[Generation] = []
+    for observation in _observations_of_type(
+        observations, LANGFUSE_GENERATION_TYPE
+    ):
+        span_id = _string_or_none(observation.get("id"))
+        if span_id is None:
+            continue
+        usage = _mapping_or_empty(observation.get("usage"))
+        cost = _mapping_or_empty(
+            observation.get("cost_details")
+        )
+        entries.append(
+            Generation(
+                span_id=span_id,
+                model=_string_or_none(
+                    observation.get("model")
+                ),
+                input_tokens=_non_negative_int_or_none(
+                    usage.get("input")
+                ),
+                output_tokens=_non_negative_int_or_none(
+                    usage.get("output")
+                ),
+                total_tokens=_non_negative_int_or_none(
+                    usage.get("total")
+                ),
+                input_cost_usd=_non_negative_float_or_none(
+                    cost.get("input")
+                ),
+                output_cost_usd=_non_negative_float_or_none(
+                    cost.get("output")
+                ),
+                total_cost_usd=_non_negative_float_or_none(
+                    cost.get("total")
+                ),
+                latency_ms=_latency_ms(
+                    observation.get("start_time"),
+                    observation.get("end_time"),
+                ),
+                timestamp=_iso_timestamp_or_none(
+                    observation.get("start_time")
+                ),
+            )
+        )
+    return tuple(entries)
+
+
 def _observations_of_type(
     observations: Sequence[Mapping[str, Any]],
     expected_type: str,
@@ -167,10 +218,62 @@ def _start_time_sort_key(value: Any) -> tuple[int, str]:
     return (1, "")
 
 
+def _mapping_or_empty(
+    value: Any,
+) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    return {}
+
+
+def _non_negative_int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, float) and value >= 0:
+        return int(value)
+    return None
+
+
+def _non_negative_float_or_none(
+    value: Any,
+) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)) and value >= 0:
+        return float(value)
+    return None
+
+
+def _latency_ms(start: Any, end: Any) -> int | None:
+    start_dt = _datetime_or_none(start)
+    end_dt = _datetime_or_none(end)
+    if start_dt is None or end_dt is None:
+        return None
+    delta = end_dt - start_dt
+    millis = int(delta.total_seconds() * 1000)
+    return millis if millis >= 0 else None
+
+
+def _datetime_or_none(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(
+                value.replace("Z", "+00:00")
+            )
+        except ValueError:
+            return None
+    return None
+
+
 __all__ = [
     "LANGFUSE_AGENT_TYPE",
     "LANGFUSE_GENERATION_TYPE",
     "LANGFUSE_TOOL_TYPE",
+    "transform_observations_to_generations",
     "transform_observations_to_routing_decisions",
     "transform_observations_to_step_count",
     "transform_observations_to_tool_calls",

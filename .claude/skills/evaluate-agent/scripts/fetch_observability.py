@@ -156,12 +156,25 @@ def _print_success_block(
                 f"  tool_calls_written: {result.tool_call_count}",
                 f"  routing_decisions_written: {result.routing_decision_count}",
                 f"  step_count_total: {result.step_count_total}",
+                f"  generations_written: {result.generation_count}",
+                f"  total_tokens: {_format_optional_scalar(result.total_tokens)}",
+                f"  total_cost_usd: {_format_optional_cost(result.total_cost_usd)}",
+                f"  total_latency_ms: {_format_optional_scalar(result.total_latency_ms)}",
                 f"  tool_calls_path: {result.written.tool_calls_path}",
                 f"  routing_decisions_path: {result.written.routing_decisions_path}",
                 f"  step_count_path: {result.written.step_count_path}",
+                f"  generations_path: {result.written.generations_path}",
             ]
         )
     )
+
+
+def _format_optional_scalar(value: int | None) -> str:
+    return "unset" if value is None else str(value)
+
+
+def _format_optional_cost(value: float | None) -> str:
+    return "unset" if value is None else f"{value:.6f}"
 
 
 def _format_optional_timestamp(

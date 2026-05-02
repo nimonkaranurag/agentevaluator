@@ -11,7 +11,10 @@ from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.schema import Case, Slug
 from evaluate_agent.scoring.evaluators import (
     evaluate_final_response_contains,
+    evaluate_max_latency_ms,
     evaluate_max_steps,
+    evaluate_max_total_cost_usd,
+    evaluate_max_total_tokens,
     evaluate_must_call,
     evaluate_must_not_call,
     evaluate_must_route_to,
@@ -52,8 +55,11 @@ class CaseScore(StrictFrozen):
                 "schema order: final_response_contains, "
                 "then must_call (per tool), then "
                 "must_not_call (per tool), then "
-                "must_route_to, then max_steps. Empty "
-                "when the case declares no assertions."
+                "must_route_to, then max_steps, then "
+                "max_total_tokens, then "
+                "max_total_cost_usd, then max_latency_ms. "
+                "Empty when the case declares no "
+                "assertions."
             ),
         ),
     ]
@@ -126,6 +132,30 @@ def score_case(
         outcomes.append(
             evaluate_max_steps(
                 assertions.max_steps,
+                case_dir=case_dir,
+            )
+        )
+
+    if assertions.max_total_tokens is not None:
+        outcomes.append(
+            evaluate_max_total_tokens(
+                assertions.max_total_tokens,
+                case_dir=case_dir,
+            )
+        )
+
+    if assertions.max_total_cost_usd is not None:
+        outcomes.append(
+            evaluate_max_total_cost_usd(
+                assertions.max_total_cost_usd,
+                case_dir=case_dir,
+            )
+        )
+
+    if assertions.max_latency_ms is not None:
+        outcomes.append(
+            evaluate_max_latency_ms(
+                assertions.max_latency_ms,
                 case_dir=case_dir,
             )
         )

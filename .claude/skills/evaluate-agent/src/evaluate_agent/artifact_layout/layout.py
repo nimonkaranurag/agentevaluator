@@ -12,6 +12,7 @@ from .filenames import (
     DOM_SNAPSHOT_EXT,
     DOM_SNAPSHOTS_SUBDIR,
     EXPLICIT_DOM_PREFIX,
+    GENERATION_LOG_FILENAME,
     OBSERVABILITY_SUBDIR,
     ROUTING_DECISION_LOG_FILENAME,
     STEP_COUNT_FILENAME,
@@ -119,6 +120,12 @@ class RunArtifactLayout:
         return (
             self.observability_log_dir(case_id)
             / STEP_COUNT_FILENAME
+        )
+
+    def generation_log_path(self, case_id: str) -> Path:
+        return (
+            self.observability_log_dir(case_id)
+            / GENERATION_LOG_FILENAME
         )
 
 
