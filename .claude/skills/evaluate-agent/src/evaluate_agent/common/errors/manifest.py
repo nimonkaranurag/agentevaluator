@@ -6,6 +6,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evaluate_agent.manifest.api_version import (
+    API_VERSION_KEY,
+    CURRENT_API_VERSION,
+    SUPPORTED_API_VERSIONS,
+)
 from pydantic import ValidationError
 
 _SKILL_ROOT = Path(__file__).resolve().parents[4]
@@ -37,6 +42,54 @@ class ManifestSyntaxError(ManifestError):
             f"To proceed:\n"
             f"  (1) Open the file and fix the YAML at the location indicated in the parser detail.\n"
             f"  (2) Re-run the validator to confirm the manifest parses before retrying any downstream step."
+        )
+
+
+class ManifestMissingApiVersionError(ManifestError):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(
+            f"Manifest at {path} does not declare the "
+            f"required {API_VERSION_KEY!r} field.\n"
+            f"To proceed:\n"
+            f"  (1) Add `{API_VERSION_KEY}: "
+            f"{CURRENT_API_VERSION}` as the first line of "
+            f"the manifest. The field pins the manifest to "
+            f"a known schema version so future schema "
+            f"changes cannot silently re-bind older "
+            f"manifests.\n"
+            f"  (2) Re-run the loader. The authoritative "
+            f"set of accepted versions is "
+            f"src/evaluate_agent/manifest/api_version/"
+            f"literal.py."
+        )
+
+
+class ManifestUnsupportedApiVersionError(ManifestError):
+    def __init__(
+        self,
+        *,
+        path: Path,
+        declared: object,
+    ) -> None:
+        self.path = path
+        self.declared = declared
+        super().__init__(
+            f"Manifest at {path} declares "
+            f"{API_VERSION_KEY}={declared!r}, which is not "
+            f"in the supported set "
+            f"{sorted(SUPPORTED_API_VERSIONS)}.\n"
+            f"To proceed:\n"
+            f"  (1) If the manifest was authored against "
+            f"this skill release, set "
+            f"`{API_VERSION_KEY}: {CURRENT_API_VERSION}` "
+            f"and re-run the loader.\n"
+            f"  (2) If the manifest was authored against a "
+            f"newer schema version, upgrade the "
+            f"evaluate-agent skill to a release that "
+            f"supports it; the authoritative supported set "
+            f"is src/evaluate_agent/manifest/api_version/"
+            f"literal.py."
         )
 
 
@@ -82,7 +135,9 @@ class ManifestDiscoveryRootError(ManifestError):
 __all__ = [
     "ManifestDiscoveryRootError",
     "ManifestError",
+    "ManifestMissingApiVersionError",
     "ManifestNotFoundError",
     "ManifestSyntaxError",
+    "ManifestUnsupportedApiVersionError",
     "ManifestValidationError",
 ]

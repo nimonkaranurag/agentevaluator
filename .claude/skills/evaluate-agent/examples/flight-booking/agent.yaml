@@ -1,6 +1,7 @@
 # Example manifest for a flight-booking agent.
 # Fields commented out below are optional; the schema enforces everything else.
 
+apiVersion: agentevaluator/v1
 name: flight-booking-agent
 description: Customer-facing flight search, quote, and booking assistant.
 

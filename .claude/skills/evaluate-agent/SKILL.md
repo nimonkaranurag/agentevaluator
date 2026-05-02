@@ -15,6 +15,7 @@ The user drops an `agent.yaml` into their working directory and asks Claude to e
 
 Top-level fields:
 
+- `apiVersion` — schema version pin. Required at the top of every manifest. The only currently-accepted value is `agentevaluator/v1`. The loader hard-rejects manifests that omit the field (`ManifestMissingApiVersionError`) and manifests that declare a value not in the supported set (`ManifestUnsupportedApiVersionError`); both errors carry an actionable recovery procedure naming the field and the registry. Future schema versions add their own `AgentManifestV{N}` variant and join the `AgentManifest` discriminated union — `apiVersion` is the discriminator.
 - `name` — agent identifier (lowercase slug; becomes part of artifact paths under `runs/`).
 - `description` — free-form context that helps disambiguate when multiple agents share a directory.
 - `access.url` — the deployed agent's web entry point. Must be `http(s)://…`. The manifest loader allowlists scheme to `{http, https}` as defense-in-depth, so `file://`, `chrome://`, `data:`, and `javascript:` are rejected at load time.

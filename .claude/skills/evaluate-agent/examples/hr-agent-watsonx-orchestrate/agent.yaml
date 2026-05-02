@@ -22,6 +22,7 @@
 # call and run scripts/fetch_observability.py after the driver step
 # (see SKILL.md "Fetch upstream observability").
 
+apiVersion: agentevaluator/v1
 name: people-directory-demo
 description: >
   Watsonx Orchestrate native-Python People Directory demo agent. Exercises
