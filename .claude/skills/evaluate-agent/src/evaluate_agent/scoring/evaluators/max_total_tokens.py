@@ -12,14 +12,16 @@ from evaluate_agent.scoring.outcomes import (
     AssertionInconclusive,
     AssertionOutcome,
     AssertionPassed,
-    ObservabilitySourceMissing,
 )
 from evaluate_agent.scoring.resolvers.log_resolvers.generation_log import (  # noqa: E501
     generation_log_path,
     resolve_generation_log,
 )
 
-from .utils import resolve_observability_log
+from .utils import (
+    gate_generation_field_coverage,
+    resolve_observability_log,
+)
 
 
 def evaluate_max_total_tokens(
@@ -36,21 +38,16 @@ def evaluate_max_total_tokens(
     )
     if isinstance(log, AssertionInconclusive):
         return log
-    contributions = [
-        entry.total_tokens
-        for entry in log.entries
-        if entry.total_tokens is not None
-    ]
-    if not contributions:
-        return AssertionInconclusive(
-            assertion_kind="max_total_tokens",
-            target=None,
-            reason=ObservabilitySourceMissing(
-                needed_evidence="generation_log",
-                expected_artifact_path=log.path,
-            ),
-        )
-    observed = sum(contributions)
+    # Coverage gate before sum: refuse to undercount silently
+    # when any captured generation is missing total_tokens.
+    contributions = gate_generation_field_coverage(
+        log=log,
+        field_name="total_tokens",
+        assertion_kind="max_total_tokens",
+    )
+    if isinstance(contributions, AssertionInconclusive):
+        return contributions
+    observed = int(sum(contributions))
     if observed <= token_limit:
         return AssertionPassed(
             assertion_kind="max_total_tokens",

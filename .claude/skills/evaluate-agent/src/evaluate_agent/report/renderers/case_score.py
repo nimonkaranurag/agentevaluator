@@ -27,6 +27,7 @@ from evaluate_agent.scoring import (
 from evaluate_agent.scoring.outcomes import (
     DOMSnapshotTooLarge,
     DOMSnapshotUnavailable,
+    GenerationCoverageIncomplete,
     ObservabilitySourceMissing,
 )
 
@@ -191,6 +192,13 @@ def _render_inconclusive(
             f"  - Size: {reason.size_bytes} bytes "
             f"(cap {reason.cap_bytes} bytes)"
         )
+    elif isinstance(reason, GenerationCoverageIncomplete):
+        lines.append(f"  - Field: `{reason.field}`")
+        lines.append(
+            f"  - Coverage: {reason.populated}/"
+            f"{reason.total} generation(s)"
+        )
+        lines.append(f"  - Log path: `{reason.log_path}`")
     lines.append(f"  - Recovery: {reason.recovery}")
     lines.append("")
     return lines

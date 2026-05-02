@@ -96,6 +96,8 @@ class CaseScore(StrictFrozen):
 def score_case(
     case: Case,
     case_dir: Path,
+    *,
+    max_dom_bytes: int,
 ) -> CaseScore:
     outcomes: list[AssertionOutcome] = []
     assertions = case.assertions
@@ -107,6 +109,7 @@ def score_case(
                     assertions.final_response_contains
                 ),
                 case_dir=case_dir,
+                max_dom_bytes=max_dom_bytes,
             )
         )
 

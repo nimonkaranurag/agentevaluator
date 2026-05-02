@@ -382,6 +382,33 @@ class InteractionConfig(StrictFrozen):
             ),
         ),
     ]
+    # Manifest-declared so two operators running the same
+    # agent.yaml on different machines see identical scoring
+    # behavior. Living in the manifest (instead of an env
+    # var or CLI flag) keeps the cap reviewable in YAML and
+    # the run reproducible across machines and CI workers.
+    max_dom_bytes: Annotated[
+        int,
+        Field(
+            default=25 * 1024 * 1024,
+            ge=64 * 1024,
+            le=500 * 1024 * 1024,
+            description=(
+                "Inclusive byte cap on the post-submit "
+                "DOM snapshot the scoring layer parses. "
+                "Snapshots above the cap resolve "
+                "final_response_contains to inconclusive "
+                "with DOMSnapshotTooLarge instead of "
+                "loading the file into memory and risking "
+                "an OOM on common machines. Default 25 "
+                "MiB sizes for typical chat UIs; raise "
+                "deliberately when the agent's reply "
+                "legitimately renders into a long page "
+                "and lower the value when running on "
+                "memory-constrained CI workers."
+            ),
+        ),
+    ]
 
 
 class Assertions(StrictFrozen):
