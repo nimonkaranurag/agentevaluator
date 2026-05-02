@@ -82,6 +82,28 @@ uv run .claude/skills/evaluate-agent/scripts/plan_swarm.py <path-to-agent.yaml> 
 
 Expands the validated manifest into a deterministic JSON fan-out plan emitted to stdout. The plan carries one shared `run_id` and one entry per case; each entry contains the absolute `case_dir` and a complete `driver_invocation` (absolute script path plus argv) sufficient to drive that case in isolation. Every entry pins the same `--run-id`, so all sibling sub-agents write artifacts into the same `runs/<agent_name>/<run_id>/` directory. Entries appear in the order the cases were declared in the manifest. Exit 0 on success, 1 on any manifest load or validation error.
 
+### Fetch upstream observability into the standard on-disk format
+
+```
+uv run .claude/skills/evaluate-agent/scripts/fetch_observability.py <path-to-agent.yaml> --case <case_id> --case-dir <path-to-case-dir> [--session-id <id>] [--since <ISO timestamp>] [--until <ISO timestamp>]
+```
+
+Reads `manifest.observability.langfuse`, resolves the public/secret key env vars the manifest names, queries the declared LangFuse host for traces matching the case, maps each trace's observations to the on-disk observability schema, and persists them under `<case-dir>/trace/observability/`. The four observability-driven assertion kinds (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) consume those files directly — running this script is what turns those four kinds from inconclusive into passed/failed for an agent instrumented with LangFuse.
+
+Trace selection:
+
+- `--session-id` filters traces whose LangFuse `session_id` matches. Defaults to the case id, so the instrumentation contract is `langfuse.update_current_trace(session_id=<case_id>)` (or the SDK equivalent) on every trace the agent emits while serving the case. When the case id collides with traces from earlier runs, narrow with `--since` / `--until` (ISO-8601 timestamps; both bounds inclusive).
+
+LangFuse-to-on-disk mapping:
+
+- `Observation.type == "TOOL"` — one row appended to `tool_calls.jsonl`. `tool_name` = `Observation.name`; `span_id` = `Observation.id`; `arguments` = `Observation.input` when it is a JSON object (otherwise omitted); `result` = `Observation.output` stringified; `timestamp` = `Observation.start_time` ISO-8601.
+- `Observation.type == "AGENT"` — one row appended to `routing_decisions.jsonl`. `target_agent` = `Observation.name`; `span_id` = `Observation.id`; `from_agent` = the parent AGENT observation's `name` when the parent is itself an AGENT (omitted at the root); `reason` = `Observation.metadata["reason"]` when present; `timestamp` = `Observation.start_time` ISO-8601.
+- `Observation.type == "GENERATION"` — one entry per LLM call appended to the `step_span_ids` ordered list inside `step_count.json`. `total_steps` = the count of GENERATION observations on the trace.
+
+Observations missing required fields (`name` for TOOL/AGENT, `id` for any kind) are silently skipped — the on-disk schema requires those fields and a partial entry would mask malformed instrumentation behind silently-wrong scores. Counts in the formal output block surface the skip rate so the user can audit instrumentation.
+
+Exit 0 once the fetch completes regardless of trace or observation count (a successful fetch with zero traces still writes empty logs so the scoring layer's downstream evaluators distinguish "no calls observed" from "log not written"). Exit 1 on any manifest load error, unknown `--case` id, missing / non-directory `--case-dir`, manifest with no `observability.langfuse` block, missing credential env var, or LangFuse query failure — each with a numbered recovery procedure on stderr.
+
 ### Score a captured case against its declared assertions
 
 ```
@@ -165,11 +187,17 @@ Follow these steps in order. Do not skip or reorder them.
     - **The whole agent (every declared case).** Invoke `plan_swarm.py` to expand the manifest into a JSON fan-out plan. Parse the plan's `entries` array. Dispatch one Agent sub-task per entry IN A SINGLE MESSAGE so every case runs in parallel under its own isolated browser context. Each sub-task's prompt must instruct the sub-agent to invoke the entry's `driver_invocation.script` with the entry's `driver_invocation.arguments` exactly as supplied — do NOT modify the argv. Every entry's argv pins the same `--run-id`, so all sibling sub-agents write into one shared `runs/<agent>/<run_id>/` directory. After all sub-tasks complete, compose results from the captured artifacts under each entry's `case_dir`; never re-run a case at the orchestrator level.
     - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
 
-5. **Score every driven case.** Branch on which driver invocation step 4 ran:
-    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 7.
-    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 7.
+5. **Fetch upstream observability — CONDITIONAL on `manifest.observability.langfuse`.** If the manifest declares `observability.langfuse`, invoke `fetch_observability.py <manifest> --case <case_id> --case-dir <case_dir>` once per driven case. The script writes `tool_calls.jsonl`, `routing_decisions.jsonl`, and `step_count.json` under `<case_dir>/trace/observability/` so the four observability-driven assertion kinds (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to passed/failed in the next step instead of inconclusive. Branch on which driver invocation step 4 ran:
+    - **Single case.** One invocation against the captured `case_dir`.
+    - **Whole agent (swarm).** One invocation per plan entry's `case_dir`. Dispatch them in parallel (one Agent sub-task per case, all sub-tasks in a single message) for the same reason the swarm itself runs in parallel — each fetch is independent and the LangFuse host tolerates concurrent reads.
+    - **Skip this step entirely** when `manifest.observability.langfuse` is null. The four observability-driven assertions then resolve to `inconclusive` in step 6 with a `recovery` procedure naming the absent log path. Do NOT invoke `fetch_observability.py` against a manifest with no langfuse block; the script exits 1 with `LangfuseSourceNotDeclared`.
+    - **In every branch:** if the credential env vars the manifest names are not set, relay the `LangfuseCredentialEnvVarMissing` message verbatim — do not proceed without credentials. If the LangFuse host is unreachable or the query fails, relay the `LangfuseQueryFailed` recovery procedure verbatim — do not silently fall through to scoring with empty observability logs. The script's formal output block reports the trace, observation, and per-kind counts so a sub-100% transformation rate (observations skipped due to missing required fields) is visible without parsing files.
 
-6. **Synthesize a per-case analytical narrative — CRITICAL.** For every case driven and scored in step 4 + 5, compose a `CaseNarrative` JSON file that explains WHY the case passed, failed, or was inconclusive. The narrative is the analytical layer the rendered report embeds; without it the report is a metric dump.
+6. **Score every driven case.** Branch on which driver invocation step 4 ran:
+    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 8.
+    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 8.
+
+7. **Synthesize a per-case analytical narrative — CRITICAL.** For every case driven and scored in step 4 + 6, compose a `CaseNarrative` JSON file that explains WHY the case passed, failed, or was inconclusive. The narrative is the analytical layer the rendered report embeds; without it the report is a metric dump.
 
     - **Schema.** `case_id` (matches the score), `summary` (one paragraph), and `observations` (one or more grounded statements). Each observation has a `kind` (`behavior`, `tool_use`, `routing`, `failure_mode`, `success_mode`), a one-sentence factual `claim`, and one or more `citations`. Each citation is a `{artifact_path, locator?}` pair pointing at a real captured file under the case directory. The authoritative schema is at [src/evaluate_agent/case_narrative/schema.py](src/evaluate_agent/case_narrative/schema.py).
     - **Ground every claim — CRITICAL.** Every observation MUST cite at least one captured artifact under the case directory. Citations MUST be absolute paths to files that already exist on disk (the screenshots, DOM snapshots, trace JSONL files, and observability logs the driver produced). NEVER invent a path; the validator rejects narratives whose citations do not resolve.
@@ -178,17 +206,17 @@ Follow these steps in order. Do not skip or reorder them.
     - **Persist the narrative.**
         - Single case: write the JSON to `<case_dir>/narrative.json`.
         - Whole agent: write one file per case to `<runs_root>/<agent>/<run_id>/narratives/<case_id>.json`. Use the same case ids the score record declares.
-    - **Validate before rendering.** For every persisted narrative, run `validate_narrative.py <narrative.json> --score <case_score.json>`. If the validator exits 1, relay its stderr verbatim to the user, fix the failing citations, and re-validate before proceeding to step 7. The validator is the structural anti-hallucination guarantee; never bypass it.
+    - **Validate before rendering.** For every persisted narrative, run `validate_narrative.py <narrative.json> --score <case_score.json>`. If the validator exits 1, relay its stderr verbatim to the user, fix the failing citations, and re-validate before proceeding to step 8. The validator is the structural anti-hallucination guarantee; never bypass it.
 
-7. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 5, and pass the synthesized narrative(s) from step 6:
+8. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 6, and pass the synthesized narrative(s) from step 7:
     - Single case: `render_report.py <case-score.json> --narrative <case_dir>/narrative.json`.
     - Whole agent: `render_report.py <agent-score.json> --narratives-dir <runs_root>/<agent>/<run_id>/narratives`.
 
     The script autodetects the record type (`CaseScore` vs `AgentScore`), verifies that every cited artifact path inside the score resolves on disk, verifies each supplied narrative against its bound case score, and emits a structured Markdown narrative to stdout. Relay the rendered Markdown to the user verbatim — every artifact citation is a real path the user can open, the recovery procedure for every inconclusive outcome is inlined in the rendered report, and every analytical claim is grounded in a citation that resolves on disk. If the script raises `UnresolvedCitationError`, `NarrativeCaseMismatchError`, `NarrativeCitationsUnresolvedError`, or `NarrativeUnknownCaseIdsError`, relay the stderr recovery procedure to the user verbatim and STOP.
 
-8. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
+9. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
 
-9. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+10. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
 
 ## Design principles
 
