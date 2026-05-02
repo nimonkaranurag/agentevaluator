@@ -27,6 +27,7 @@ _NeededEvidence = Literal[
     "tool_call_log",
     "routing_decision_log",
     "step_count",
+    "generation_log",
 ]
 
 

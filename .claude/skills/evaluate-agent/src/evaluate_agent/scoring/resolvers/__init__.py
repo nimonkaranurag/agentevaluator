@@ -3,8 +3,11 @@ Locate captured artifacts on disk and return their parsed shapes.
 """
 
 from .log_resolvers import (
+    ResolvedGenerationLog,
     ResolvedRoutingDecisionLog,
     ResolvedToolCallLog,
+    generation_log_path,
+    resolve_generation_log,
     resolve_routing_decision_log,
     resolve_tool_call_log,
     routing_decision_log_path,
@@ -22,11 +25,14 @@ from .other_resolvers import (
 
 __all__ = [
     "ResolvedDOMSnapshot",
+    "ResolvedGenerationLog",
     "ResolvedRoutingDecisionLog",
     "ResolvedStepCount",
     "ResolvedToolCallLog",
     "extract_visible_text",
+    "generation_log_path",
     "post_submit_dom_snapshot_dir",
+    "resolve_generation_log",
     "resolve_post_submit_dom_snapshot",
     "resolve_routing_decision_log",
     "resolve_step_count",

@@ -95,9 +95,77 @@ class OtelSource(StrictFrozen):
     )
 
 
+UIExposedEvidence = Literal[
+    "tool_calls",
+    "routing_decisions",
+    "step_count",
+]
+
+
+class UIIntrospectionSource(StrictFrozen):
+    description: Annotated[
+        str,
+        Field(
+            min_length=1,
+            description=(
+                "Free-form description of WHERE the chat "
+                "UI exposes the structured signal once "
+                "reveal_actions have run. Read by the "
+                "extracting sub-agent to locate and parse "
+                "entries from the captured post-submit "
+                "DOM. Be concrete: name the DOM region, "
+                "the visual anchor, and the per-entry "
+                "shape — e.g. 'each agent reply embeds a "
+                '<details data-testid="reasoning-panel"> '
+                "listing tool name, JSON arguments, and "
+                "result per step in execution order'."
+            ),
+        ),
+    ]
+    reveal_actions: Annotated[
+        list[Precondition],
+        Field(
+            default_factory=list,
+            description=(
+                "Ordered actions the driver runs AFTER "
+                "case_input has been submitted and "
+                "interaction.response_wait_ms has elapsed, "
+                "but BEFORE capturing the post-submit DOM. "
+                "Use these to expand a collapsed reasoning "
+                "drawer, click a 'show details' toggle, or "
+                "switch to a debug tab so the captured DOM "
+                "contains the structured tool-call signal. "
+                "Empty when the UI exposes the signal on "
+                "every reply without a reveal step."
+            ),
+        ),
+    ]
+    exposes: Annotated[
+        frozenset[UIExposedEvidence],
+        Field(
+            min_length=1,
+            description=(
+                "Evidence kinds the chat UI surfaces. "
+                "Declare 'tool_calls' when the UI shows "
+                "tool name + arguments per call (enables "
+                "must_call / must_not_call), "
+                "'routing_decisions' when the UI shows "
+                "which sub-agent each step routed to "
+                "(enables must_route_to), and 'step_count' "
+                "when the UI shows a discrete reasoning-"
+                "step counter (enables max_steps). "
+                "Assertion kinds whose evidence is not "
+                "exposed remain inconclusive with the "
+                "standard recovery procedure."
+            ),
+        ),
+    ]
+
+
 class Observability(StrictFrozen):
     langfuse: LangfuseSource | None = None
     otel: OtelSource | None = None
+    ui_introspection: UIIntrospectionSource | None = None
 
 
 class Precondition(StrictFrozen):
@@ -209,6 +277,48 @@ class Assertions(StrictFrozen):
     final_response_contains: str | None = Field(
         default=None, min_length=1
     )
+    max_total_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Inclusive upper bound on the sum of "
+            "total_tokens across every Generation "
+            "captured for the case. Resolves against "
+            "generations.jsonl — trace-backend only "
+            "(LangFuse / OTEL); chat UIs do not expose "
+            "token counts so ui_introspection cannot "
+            "supply this. Inconclusive when "
+            "generations.jsonl is absent."
+        ),
+    )
+    max_total_cost_usd: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Inclusive upper bound on the sum of "
+            "total_cost_usd across every Generation "
+            "captured for the case. Resolves against "
+            "generations.jsonl — trace-backend only. "
+            "Inconclusive when generations.jsonl is "
+            "absent OR when the captured generations "
+            "carry no cost_details (some self-hosted "
+            "LangFuse instances skip cost mapping)."
+        ),
+    )
+    max_latency_ms: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Inclusive upper bound on the sum of "
+            "latency_ms across every Generation "
+            "captured for the case (total LLM-generation "
+            "wall-clock time). Resolves against "
+            "generations.jsonl — trace-backend only. "
+            "Inconclusive when generations.jsonl is "
+            "absent OR when generations carry no "
+            "start/end timestamps."
+        ),
+    )
 
     @model_validator(mode="after")
     def _must_and_must_not_are_disjoint(
@@ -311,5 +421,7 @@ __all__ = [
     "OtelSource",
     "Precondition",
     "Slug",
+    "UIExposedEvidence",
+    "UIIntrospectionSource",
     "WebAccess",
 ]

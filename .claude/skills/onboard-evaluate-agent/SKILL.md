@@ -66,14 +66,35 @@ Ask, one per turn:
 
 ### Step 7 — Configure `observability` (optional)
 
-Ask: *"Is the agent instrumented with a structured observability source you want the evaluator to read tool calls / routing / step counts from? Common answers: LangFuse, OpenTelemetry collector, none."*
+The four observability-driven assertions (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) need structured evidence beyond the always-on screenshot + post-submit DOM. Two independent paths populate that evidence — ask each one separately, in order, and let the user opt into none, one, or both. Both writing to the same on-disk JSONL is fine; precedence is deterministic (trace backend wins when present).
 
-- **none** — write nothing. Tell the user: *"Got it — the four observability-driven assertions (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) will resolve to `inconclusive` with a recovery procedure naming the absent log path. The two structurally-grounded assertions (`final_response_contains` and the always-on Playwright capture) still resolve to passed/failed."*
+**Step 7a — Trace backend.** Ask: *"Is the agent instrumented with a structured TRACE BACKEND you want the evaluator to read from? This is a server-side trace store the runtime emits to (LangFuse, OpenTelemetry, etc.) — independent of whatever the chat UI shows. Common answers: LangFuse, OpenTelemetry collector, none."*
+
+- **none** — write nothing under `observability.langfuse` / `observability.otel`; do NOT yet conclude assertions are inconclusive — Step 7b might still wire the signal. Move on to 7b.
 - **LangFuse** — ask for `host` + the env-var names holding the public/secret key. Hints:
   - *"Host: `https://cloud.langfuse.com` for SaaS, or your self-hosted URL."*
   - *"Public + secret key pair: open your LangFuse project → Settings → API Keys → Create new keys. The MANIFEST stores env-var names — choose names like `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` and tell me which names you'll use; you'll export the actual values into your shell separately."*
   - After writing, remind: *"For the agentevaluator's `fetch_observability.py` to find your traces, the agent's tool calls must emit observations stamped with `session_id` matching either the case id (default) or whatever you pass via `--session-id`. If you don't already instrument this, see `examples/hr-agent-watsonx-orchestrate/_resources/tools/people_directory_tools.py` for a reference pattern."*
-- **OpenTelemetry / OTEL** — ask for the endpoint URL + (optional) headers env var. Hint: *"Endpoint should be your OTEL collector's HTTP/gRPC ingest URL, e.g. `https://otel.example.com/v1/traces`. If your collector requires auth headers (bearer, OTLP-Headers), give me the env-var name that will hold them."* Note: *"The OTEL fetcher is not yet shipped — declaring the source means the manifest is forward-compatible, but observability assertions stay inconclusive until either you wire up a fetcher or the OTEL fetcher lands."*
+- **OpenTelemetry / OTEL** — ask for the endpoint URL + (optional) headers env var. Hint: *"Endpoint should be your OTEL collector's HTTP/gRPC ingest URL, e.g. `https://otel.example.com/v1/traces`. If your collector requires auth headers (bearer, OTLP-Headers), give me the env-var name that will hold them."* Note: *"The OTEL fetcher is not yet shipped — declaring the source means the manifest is forward-compatible, but observability assertions stay inconclusive via this path until either you wire up a fetcher or the OTEL fetcher lands."*
+
+**Step 7b — UI introspection.** Ask, on its own turn: *"Does the agent's chat UI itself expose tool calls and parameters in any interactable UI element — for example a 'reasoning' panel you click to expand, a debug drawer, an inline 'tool call' card under each message? This is independent of any trace backend. If yes, the evaluator extracts the same structured evidence from the captured DOM, so the four observability-driven assertions can resolve to passed/failed via the UI alone — no trace backend required. (yes / no)"*
+
+The procurement hint here is runtime-scoped per the answer in Step 3:
+
+- **watsonx Orchestrate** — *"Yes — Orchestrate's chat UI exposes a 'reasoning' dropdown next to each agent reply. Clicking it reveals each step's tool name, JSON arguments, and result inline in the message DOM."*
+- **LangGraph w/ custom UI** — *"Depends on what you wrap LangGraph with — open the chat URL in Chrome, send a message that triggers a tool call, and look for any visible 'tool call', 'reasoning', or 'debug' UI element. If you built a streaming chat UI without one, the answer is no."*
+- **Claude Agent SDK app** — *"Depends on whether your app surfaces the agent's tool_use blocks in the UI. Open the chat URL in Chrome and check whether tool calls render visibly in the message stream. If they're hidden, answer no."*
+- **Generic / unknown** — *"Open the chat URL in Chrome, trigger a tool call, and inspect the resulting DOM. If you can SEE the tool name and arguments somewhere in the page (even behind a click-to-expand toggle), the answer is yes."*
+
+If **no** — do nothing under `observability.ui_introspection`. Move on. Tell the user: *"Got it. With no trace backend AND no UI introspection declared, the four observability-driven assertions will resolve to `inconclusive` with a recovery procedure naming the absent log path. The two structurally-grounded assertions (`final_response_contains` and the always-on Playwright capture) still resolve to passed/failed."*
+
+If **yes** — ask the following, ONE PER TURN, then write `observability.ui_introspection` to the manifest:
+
+1. **`ui_introspection.reveal_actions`** — same `{action, selector, value?}` grammar as `interaction.preconditions`, but applied AFTER the case input is submitted and `interaction.response_wait_ms` has elapsed. Hint: *"If the panel is visible without any interaction (always-on inline cards, etc.), leave this empty. If it's collapsed by default and needs a click to expand, that click is a reveal action. For Orchestrate specifically: `{action: 'click', selector: 'button[aria-label=\"Show reasoning\"]'}` (verify the exact aria-label by inspecting the toggle in Chrome — Orchestrate's label varies by version). The driver runs every reveal action in declared order before capturing the post-submit DOM, so the captured DOM contains the structured signal."*
+2. **`ui_introspection.description`** — free-form text telling the extracting sub-agent WHERE in the captured DOM the entries appear and WHAT shape they take. Hint: *"Be concrete and structural. Name the DOM region (a selector, a data-testid, a recognizable wrapper element), the visual anchor (a heading, an aria-label), and the per-entry shape (the per-call sub-element, where the tool name appears, where arguments appear, where the result appears). For Orchestrate: 'After clicking the reasoning toggle, each step appears as a child of the agent reply's `<details data-testid=\"reasoning-panel\">` element, listing the bare tool name, a JSON arguments block, and the result string per step in execution order.' For your own UI, paste the relevant DOM snippet — the more concrete the description, the cleaner the extracted evidence."*
+3. **`ui_introspection.exposes`** — which evidence kinds the UI surfaces. Hint: *"Pick any subset of `tool_calls`, `routing_decisions`, `step_count`. Declare `tool_calls` if the UI shows tool name + arguments per call (enables `must_call` / `must_not_call`). Declare `routing_decisions` if the UI shows which sub-agent each step routed to (enables `must_route_to`); skip it for single-agent runtimes. Declare `step_count` if the UI shows a discrete reasoning-step counter (enables `max_steps`); skip it if there's only an inline list and you'd be guessing at the boundary between steps. Kinds you don't declare stay inconclusive — that's correct, not a regression."*
+
+After writing, summarize back to the user which assertion kinds will now resolve via UI extraction (computed from `exposes`), and which will stay inconclusive unless a trace backend is declared.
 
 ### Step 8 — Configure `tools_catalog` and `agents_catalog` (optional)
 
@@ -87,14 +108,17 @@ This is the bulk of the manifest. Cases are the scenarios the evaluator drives. 
 
 1. **`cases[i].id`** — slug. Hint: *"Filesystem-safe slug used in the case's run directory and in score artifacts. Convention: snake_case, descriptive — e.g. `book_jfk_lhr`, `unknown_employee_alias`."*
 2. **`cases[i].input`** — the literal user message the driver types into the chat. Hint: *"Phrase this exactly as a real user would. The driver types it verbatim, presses Enter, and waits `interaction.response_wait_ms` for the response."*
-3. **`cases[i].assertions`** — walk per assertion kind, asking only the ones the user opts in to. Six kinds exist:
-   - `must_call: [tool, ...]`
-   - `must_not_call: [tool, ...]`
-   - `must_route_to: <agent_name>`
-   - `max_steps: <int>`
-   - `final_response_contains: "<substring>"`
+3. **`cases[i].assertions`** — walk per assertion kind, asking only the ones the user opts in to. Eight kinds exist:
+   - `must_call: [tool, ...]` — populated by trace backend OR ui_introspection.
+   - `must_not_call: [tool, ...]` — populated by trace backend OR ui_introspection.
+   - `must_route_to: <agent_name>` — populated by trace backend OR ui_introspection.
+   - `max_steps: <int>` — populated by trace backend OR ui_introspection.
+   - `final_response_contains: "<substring>"` — always-on (post-submit DOM).
+   - `max_total_tokens: <int>` — TRACE-BACKEND ONLY. Inclusive cap on the sum of `total_tokens` across every captured generation. Resolves against `generations.jsonl`. Inconclusive on UI-introspection-only manifests because chat UIs don't render token counts.
+   - `max_total_cost_usd: <float>` — TRACE-BACKEND ONLY. Inclusive cap on the sum of `total_cost_usd` across every captured generation. Inconclusive when the trace backend doesn't emit cost details.
+   - `max_latency_ms: <int>` — TRACE-BACKEND ONLY. Inclusive cap on the sum of per-generation `latency_ms` (total LLM-generation wall-clock). Inconclusive when the trace backend doesn't emit per-generation start/end timestamps.
 
-   For each kind, briefly describe what it checks and how it resolves. Example for `final_response_contains`: *"Resolves against the post-submit DOM snapshot's visible text. Pass an exact substring you expect to appear in the agent's reply — typically a value the agent should have surfaced from a tool call."*
+   For each kind, briefly describe what it checks and how it resolves. Example for `final_response_contains`: *"Resolves against the post-submit DOM snapshot's visible text. Pass an exact substring you expect to appear in the agent's reply — typically a value the agent should have surfaced from a tool call."* Example for `max_total_tokens`: *"Inclusive cap on the sum of `total_tokens` across the case's LLM generations. Resolves against `generations.jsonl` (populated only when `observability.langfuse` is declared and the runtime emits `usage` per generation). Pick a value that's comfortably above your typical run — twice the median is a reasonable starting point."* Skip the three generation-grounded asks entirely if the user declared NO trace backend in Step 7a — they'd just resolve to inconclusive.
 
 After the first case is complete, ask: *"Add another case? (yes / no / skip — but the schema requires at least one declared case)."* Loop until the user says no.
 

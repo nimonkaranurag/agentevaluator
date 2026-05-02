@@ -134,6 +134,17 @@ def plan_swarm(
                 _POST_SUBMIT_STEP_NUMBER,
                 POST_SUBMIT_LABEL,
             ),
+            ui_introspection=manifest.observability.ui_introspection,
+            tool_call_log_path=layout.tool_call_log_path(
+                case.id
+            ),
+            routing_decision_log_path=layout.routing_decision_log_path(
+                case.id
+            ),
+            step_count_path=layout.step_count_path(case.id),
+            generation_log_path=layout.generation_log_path(
+                case.id
+            ),
         )
         for case in manifest.cases
     )

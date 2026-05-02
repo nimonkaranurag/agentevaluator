@@ -21,6 +21,8 @@ from .schema import (
     AgentManifest,
     InteractionConfig,
     Precondition,
+    UIExposedEvidence,
+    UIIntrospectionSource,
 )
 
 __all__ = [
@@ -35,6 +37,8 @@ __all__ = [
     "ManifestSyntaxError",
     "ManifestValidationError",
     "Precondition",
+    "UIExposedEvidence",
+    "UIIntrospectionSource",
     "discover_manifests",
     "load_manifest",
 ]

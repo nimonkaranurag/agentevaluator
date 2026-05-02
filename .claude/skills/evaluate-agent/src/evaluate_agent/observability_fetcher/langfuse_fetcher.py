@@ -20,6 +20,7 @@ from .langfuse_credentials import (
     resolve_langfuse_credentials,
 )
 from .langfuse_transform import (
+    transform_observations_to_generations,
     transform_observations_to_routing_decisions,
     transform_observations_to_step_count,
     transform_observations_to_tool_calls,
@@ -42,6 +43,10 @@ class FetchedObservability:
     tool_call_count: int
     routing_decision_count: int
     step_count_total: int
+    generation_count: int
+    total_tokens: int | None
+    total_cost_usd: float | None
+    total_latency_ms: int | None
     written: WrittenObservabilityArtifacts
 
 
@@ -85,12 +90,16 @@ def fetch_langfuse_observability(
     step_count = transform_observations_to_step_count(
         observations
     )
+    generations = transform_observations_to_generations(
+        observations
+    )
 
     written = write_observability_artifacts(
         case_dir=case_dir,
         tool_calls=tool_calls,
         routing_decisions=routing_decisions,
         step_count=step_count,
+        generations=generations,
     )
 
     return FetchedObservability(
@@ -101,8 +110,27 @@ def fetch_langfuse_observability(
         tool_call_count=len(tool_calls),
         routing_decision_count=len(routing_decisions),
         step_count_total=step_count.total_steps,
+        generation_count=len(generations),
+        total_tokens=_optional_sum(
+            g.total_tokens for g in generations
+        ),
+        total_cost_usd=_optional_sum(
+            g.total_cost_usd for g in generations
+        ),
+        total_latency_ms=_optional_sum(
+            g.latency_ms for g in generations
+        ),
         written=written,
     )
+
+
+def _optional_sum(values: Any) -> Any:
+    collected = [v for v in values if v is not None]
+    if not collected:
+        return None
+    if all(isinstance(v, int) for v in collected):
+        return sum(collected)
+    return float(sum(collected))
 
 
 def _construct_langfuse_client(
@@ -227,6 +255,9 @@ def _observation_to_dict(
             "start_time",
             "end_time",
             "trace_id",
+            "model",
+            "usage",
+            "cost_details",
         )
     }
 

@@ -36,15 +36,40 @@ The repo ships with a ready-to-run example so you can see the full loop before w
 - **[`hr-agent-watsonx-orchestrate`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml)**
 → Check the [walkthrough](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/_resources/README.md) to see how it all connects.
 
-#### Enable orchestrate's built-in Langfuse (one-time, local dev)
+#### Enable orchestrate's built-in Langfuse (one-time, local dev) [OPTIONAL]
 
-Orchestrate's Developer Edition ships with Langfuse built in but it's opt-in — start the server with the flag below so the four observability-driven assertions (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to passed/failed instead of inconclusive:
+> The LangFuse integration is provided in this skill for more opaque runtimes than Orchestrate, in the Orchestrate ChatUI -- tool use is visible in a reasoning panel. 
+> Thus, metrics like max_steps in the conversation can simply be inferred by counting the number of agent and user turns manually (since there are no hidden steps in the Orchestrate ChatUI).
+> However, for deeper insights like token usage statistics - a LangFuse/OTel trace emitter must be available in the agent's runtime.
+
+Orchestrate's Developer Edition ships with Langfuse built in but it's opt-in — start the server with the flag below so the trace-backend-only assertions (`max_total_tokens`, `max_total_cost_usd`, `max_latency_ms`, on top of the four UI-introspectable ones — `must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to passed/failed instead of inconclusive:
 
 ```sh
 orchestrate server start --with-langfuse        # -l also works
 ```
 
-Local Langfuse UI lands at [`http://localhost:3010`](http://localhost:3010) (creds: `orchestrate@ibm.com` / `orchestrate`). Sign in, generate an API key pair (Settings → API Keys), export them as `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` in the shell that runs `/evaluate-agent`. Tool-call / agent-decision / generation spans are auto-emitted by orchestrate — no SDK wiring lives in your tools.
+Local Langfuse UI lands at [`http://localhost:3010`](http://localhost:3010) (creds: `orchestrate@ibm.com` / `orchestrate`). Sign in, generate an API key pair (Settings → API Keys), export them as `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` in the shell that runs `/evaluate-agent`. Tool-call / agent-decision / generation spans are auto-emitted by orchestrate — no SDK wiring lives in your tools. The fetcher pulls `usage` (input / output / total tokens), `cost_details` (USD), and `start_time` / `end_time` (latency) off every GENERATION observation and lands them in `generations.jsonl`, so the three generation-grounded assertions become evaluable. The bundled [`hr-agent-watsonx-orchestrate/agent.yaml`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml) declares calibrated `max_total_tokens` / `max_total_cost_usd` / `max_latency_ms` bounds on every case — running the demo with LangFuse enabled captures token usage, cost, and per-case wall-clock as pass/fail signal alongside the behavioural assertions.
+
+#### ⏩ Skip LangFuse entirely with `observability.ui_introspection`
+
+When the chat UI itself surfaces tool calls + parameters (Orchestrate's reasoning panel, LangSmith Studio's run pane, AutoGen Studio's debug drawer, your own debug element), declare `observability.ui_introspection` and the evaluator extracts the same structured evidence directly from the captured post-submit DOM — same on-disk JSONL, same scoring path, no separate trace backend required (of-course, with a limited view of final metrics - <ins>suited for basic higher-level eval insights: integration tests, tool use, user query resolution success, etc.</ins>):
+
+```yaml
+observability:
+  ui_introspection:
+    description: >
+      Each agent reply renders a 'reasoning' panel; clicking the toggle
+      expands it inline within the same agent-reply DOM subtree, listing
+      tool name + JSON arguments + result per step in execution order.
+    reveal_actions:
+      - action: click
+        selector: "button[aria-label='Show reasoning']"
+    exposes:
+      - tool_calls
+      - routing_decisions
+```
+
+`/onboard-evaluate-agent` asks whether your chat UI surfaces this signal during onboarding and walks you through `description`, `reveal_actions`, and `exposes` one turn at a time. Both paths can coexist on the same manifest — when both are declared, the LangFuse fetch wins and UI extraction acts as the fallback. See [`examples/hr-agent-watsonx-orchestrate/agent.yaml`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml) for the full shape against the Orchestrate UI.
 
 #### Happy-path testing/POC
 
@@ -57,7 +82,7 @@ Local Langfuse UI lands at [`http://localhost:3010`](http://localhost:3010) (cre
 
 <br>
 
-![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI (basic, bare-bones integration POC)*
+![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI for basic eval metrics, and/or optionally using its trace emitting backend for deeper insights*
 
 
 

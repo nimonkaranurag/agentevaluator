@@ -47,28 +47,65 @@ interaction:
   input_selector: "[contenteditable='true']"
   response_wait_ms: 8000
 
-# Observability is supplied by orchestrate's built-in LangFuse integration.
-# Start the dev server with:
+# Observability declares two independent evidence sources for the four
+# observability-driven assertions (must_call, must_not_call, must_route_to,
+# max_steps). Both write to the same on-disk JSONL the evaluator reads;
+# precedence is deterministic — when both are declared, the LangFuse fetch
+# in step 5 of the evaluator overwrites the UI-extracted logs from step 4.
 #
-#   orchestrate server start --with-langfuse
+# 1) langfuse — orchestrate's built-in LangFuse integration. Start the dev
+#    server with:
+#      orchestrate server start --with-langfuse
+#    That brings up a local Langfuse at http://localhost:3010 (creds:
+#    orchestrate@ibm.com / orchestrate). After logging in, generate an API
+#    key pair from Settings -> API Keys and export them as the env-var names
+#    below so fetch_observability.py can authenticate when querying the
+#    local host. Orchestrate auto-instruments tool calls / agent decisions /
+#    generations emitted by people_directory_agent — no SDK wiring lives in
+#    the toolkit.
 #
-# That brings up a local Langfuse at http://localhost:3010 (creds:
-# orchestrate@ibm.com / orchestrate). After logging in, generate an API key
-# pair from Settings -> API Keys and export them as the env-var names below
-# so fetch_observability.py can authenticate when querying the local host.
-# Orchestrate auto-instruments tool calls / agent decisions / generations
-# emitted by people_directory_agent — no SDK wiring lives in the toolkit.
+# 2) ui_introspection — orchestrate's chat UI exposes the same signal in a
+#    'reasoning' panel next to each agent reply. Declaring this lets the
+#    four observability-driven assertions resolve via the captured DOM even
+#    when the local LangFuse instance isn't running, by extracting the same
+#    on-disk JSONL from the post-submit DOM. The reveal_action below clicks
+#    the panel toggle BEFORE the post-submit DOM is captured so the panel
+#    is expanded in the captured DOM.
 observability:
   langfuse:
     host: http://localhost:3010
     public_key_env: LANGFUSE_PUBLIC_KEY
     secret_key_env: LANGFUSE_SECRET_KEY  # pragma: allowlist secret
+  ui_introspection:
+    description: >
+      Each agent reply renders a 'reasoning' panel next to the message
+      bubble. After clicking the per-reply toggle (run as a reveal_action
+      below), the panel expands inline within the same agent-reply DOM
+      subtree and lists each step in execution order: the bare tool name,
+      a JSON arguments block, and the stringified result. Sub-agent
+      routing decisions surface as parent steps that wrap their child
+      tool steps; the visible label of the parent step IS the routed
+      sub-agent's name. There is no discrete step counter exposed in
+      the UI, so step_count is intentionally NOT in `exposes`.
+    reveal_actions:
+      - action: click
+        selector: "button[aria-label='Show reasoning']"
+    exposes:
+      - tool_calls
+      - routing_decisions
 
 tools_catalog:
   - lookup_employee_record
   - list_paid_leave_days
   - list_direct_reports
 
+# max_total_tokens / max_total_cost_usd / max_latency_ms below resolve only
+# when manifest.observability.langfuse is wired AND the runtime emits
+# GENERATION observations with usage + cost_details (Orchestrate's built-in
+# LangFuse does this when started with --with-langfuse). They will resolve
+# to inconclusive on a UI-introspection-only run since chat UIs do not
+# render token counts or costs. Bounds below are calibrated for a Claude /
+# GPT-class model on the People Directory toolkit; tune to taste.
 cases:
   - id: timeoff_for_known_employee
     input: "What time off did alex.river take between 2026-01-01 and 2026-03-31?"
@@ -79,6 +116,9 @@ cases:
       must_not_call:
         - list_direct_reports
       max_steps: 4
+      max_total_tokens: 4000
+      max_total_cost_usd: 0.05
+      max_latency_ms: 12000
       final_response_contains: "20260118"
 
   - id: timeoff_with_multiple_days_in_range
@@ -90,6 +130,9 @@ cases:
       must_not_call:
         - list_direct_reports
       max_steps: 4
+      max_total_tokens: 4000
+      max_total_cost_usd: 0.05
+      max_latency_ms: 12000
       final_response_contains: "20260301"
 
   - id: manager_direct_reports
@@ -101,6 +144,9 @@ cases:
       must_not_call:
         - list_paid_leave_days
       max_steps: 4
+      max_total_tokens: 4000
+      max_total_cost_usd: 0.05
+      max_latency_ms: 12000
       final_response_contains: "alex.river"
 
   - id: manager_team_timeoff_fanout
@@ -113,6 +159,9 @@ cases:
         - list_direct_reports
         - list_paid_leave_days
       max_steps: 10
+      max_total_tokens: 10000
+      max_total_cost_usd: 0.15
+      max_latency_ms: 30000
       final_response_contains: "20260118"
 
   - id: unknown_employee_alias
@@ -124,4 +173,7 @@ cases:
         - list_paid_leave_days
         - list_direct_reports
       max_steps: 3
+      max_total_tokens: 3000
+      max_total_cost_usd: 0.04
+      max_latency_ms: 9000
       final_response_contains: "not registered"

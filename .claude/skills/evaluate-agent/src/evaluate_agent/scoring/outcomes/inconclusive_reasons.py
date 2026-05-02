@@ -72,6 +72,7 @@ class ObservabilitySourceMissing(StrictFrozen):
             "tool_call_log",
             "routing_decision_log",
             "step_count",
+            "generation_log",
         ],
         Field(
             description=(
@@ -79,9 +80,18 @@ class ObservabilitySourceMissing(StrictFrozen):
                 "assertion requires. The Playwright "
                 "baseline (network HAR, page event "
                 "streams, screenshots, DOM snapshots) "
-                "does not carry this information; the "
-                "manifest must declare an observability "
-                "source that exposes it."
+                "does not carry this information. The "
+                "first three kinds (tool_call_log, "
+                "routing_decision_log, step_count) can "
+                "be populated by either a trace backend "
+                "(langfuse, otel) or ui_introspection "
+                "when the chat UI itself surfaces the "
+                "signal. The fourth kind "
+                "(generation_log — token usage, cost, "
+                "and latency per LLM generation) is "
+                "trace-backend-only: chat UIs do not "
+                "expose token counts or costs, so "
+                "ui_introspection cannot supply this."
             ),
         ),
     ]
@@ -102,15 +112,37 @@ class ObservabilitySourceMissing(StrictFrozen):
         str,
         Field(
             default=(
-                "To proceed: declare an observability "
-                "source under manifest.observability "
-                "(langfuse for tool_call_log and "
-                "routing_decision_log; otel for "
-                "step_count) and confirm the agent under "
-                "evaluation emits the corresponding "
-                "spans. Land the structured log at the "
-                "expected_artifact_path. Re-run the case "
-                "with --submit and re-score."
+                "To proceed, pick the path the missing "
+                "evidence supports:\n"
+                "  (1) For tool_call_log / "
+                "routing_decision_log / step_count — "
+                "declare a trace backend under "
+                "manifest.observability (langfuse for "
+                "all three; otel forward-compat) AND/OR "
+                "declare manifest.observability."
+                "ui_introspection if the agent's chat "
+                "UI surfaces the signal (reasoning "
+                "panel, debug drawer, inline tool-call "
+                "cards). For ui_introspection, provide "
+                "reveal_actions if the panel is "
+                "collapsed by default, a description "
+                "naming where the entries appear in the "
+                "DOM, and exposes listing the evidence "
+                "kinds the UI shows.\n"
+                "  (2) For generation_log (token "
+                "usage / cost / latency) — only the "
+                "trace backend path applies. Declare "
+                "manifest.observability.langfuse and "
+                "confirm the runtime auto-emits "
+                "GENERATION observations with usage and "
+                "cost_details (Orchestrate's built-in "
+                "LangFuse does this when started with "
+                "--with-langfuse). UI introspection "
+                "cannot supply this — chat UIs do not "
+                "render token counts or costs.\n"
+                "Either path lands the structured log "
+                "at the expected_artifact_path. Re-run "
+                "the case with --submit and re-score."
             ),
             min_length=1,
             description=(
