@@ -9,23 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .filenames import (
-    AUTO_PREFIX,
-    CONSOLE_FILENAME,
     DOM_SNAPSHOT_EXT,
     DOM_SNAPSHOTS_SUBDIR,
     EXPLICIT_DOM_PREFIX,
-    HAR_FILENAME,
     OBSERVABILITY_SUBDIR,
-    PAGE_ERRORS_LOG_FILENAME,
-    REQUESTS_FILENAME,
-    RESPONSES_FILENAME,
     ROUTING_DECISION_LOG_FILENAME,
     STEP_COUNT_FILENAME,
     TOOL_CALL_LOG_FILENAME,
     TRACE_SUBDIR,
 )
 from .run_id import RUN_ID_FORMAT, parse_run_id
-from .trace_paths import TraceArtifactPaths
 
 
 @dataclass(frozen=True)
@@ -82,32 +75,6 @@ class RunArtifactLayout:
         filename = f"step-{step_number:03d}-{label}.png"
         return self.case_dir(case_id) / filename
 
-    def auto_screenshot_path(
-        self,
-        case_id: str,
-        step_number: int,
-        event_suffix: str,
-    ) -> Path:
-        filename = (
-            f"{AUTO_PREFIX}-{step_number:03d}-"
-            f"{event_suffix}.png"
-        )
-        return self.case_dir(case_id) / filename
-
-    def trace_paths(
-        self, case_id: str
-    ) -> TraceArtifactPaths:
-        trace_dir = self.case_dir(case_id) / TRACE_SUBDIR
-        return TraceArtifactPaths(
-            trace_dir=trace_dir,
-            har_path=trace_dir / HAR_FILENAME,
-            requests_path=trace_dir / REQUESTS_FILENAME,
-            responses_path=trace_dir / RESPONSES_FILENAME,
-            console_path=trace_dir / CONSOLE_FILENAME,
-            page_errors_path=trace_dir
-            / PAGE_ERRORS_LOG_FILENAME,
-        )
-
     def dom_snapshot_dir(self, case_id: str) -> Path:
         return (
             self.case_dir(case_id)
@@ -124,18 +91,6 @@ class RunArtifactLayout:
         filename = (
             f"{EXPLICIT_DOM_PREFIX}-{step_number:03d}-"
             f"{label}.{DOM_SNAPSHOT_EXT}"
-        )
-        return self.dom_snapshot_dir(case_id) / filename
-
-    def auto_dom_snapshot_path(
-        self,
-        case_id: str,
-        step_number: int,
-        event_suffix: str,
-    ) -> Path:
-        filename = (
-            f"{AUTO_PREFIX}-{step_number:03d}-"
-            f"{event_suffix}.{DOM_SNAPSHOT_EXT}"
         )
         return self.dom_snapshot_dir(case_id) / filename
 

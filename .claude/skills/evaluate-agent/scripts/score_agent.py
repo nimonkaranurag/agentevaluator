@@ -43,7 +43,7 @@ from evaluate_agent.manifest.schema import (  # noqa: E402
     Case,
 )
 from evaluate_agent.orchestration import (  # noqa: E402
-    SwarmEntry,
+    CaseDirective,
     SwarmPlan,
 )
 from evaluate_agent.scoring import (  # noqa: E402
@@ -130,16 +130,16 @@ def _load_plan(plan_path: Path) -> SwarmPlan:
 def _resolve_cases_against_manifest(
     plan: SwarmPlan,
     manifest: AgentManifest,
-) -> list[tuple[SwarmEntry, Case]]:
+) -> list[tuple[CaseDirective, Case]]:
     cases_by_id = {c.id: c for c in manifest.cases}
     missing: list[str] = []
-    resolved: list[tuple[SwarmEntry, Case]] = []
-    for entry in plan.entries:
-        case = cases_by_id.get(entry.case_id)
+    resolved: list[tuple[CaseDirective, Case]] = []
+    for directive in plan.directives:
+        case = cases_by_id.get(directive.case_id)
         if case is None:
-            missing.append(entry.case_id)
+            missing.append(directive.case_id)
             continue
-        resolved.append((entry, case))
+        resolved.append((directive, case))
     if missing:
         declared = ", ".join(c.id for c in manifest.cases)
         raise _PlanCaseMismatchError(
@@ -160,12 +160,12 @@ def _resolve_cases_against_manifest(
 
 
 def _validate_case_dirs_present(
-    resolved: list[tuple[SwarmEntry, Case]],
+    resolved: list[tuple[CaseDirective, Case]],
 ) -> None:
     missing: list[Path] = [
-        entry.case_dir
-        for entry, _ in resolved
-        if not entry.case_dir.is_dir()
+        directive.case_dir
+        for directive, _ in resolved
+        if not directive.case_dir.is_dir()
     ]
     if missing:
         listing = "\n".join(f"  - {p}" for p in missing)
@@ -176,15 +176,17 @@ def _validate_case_dirs_present(
             f"To proceed:\n"
             f"  (1) Confirm every case in the plan was "
             f"driven to completion. The orchestrator "
-            f"dispatches one sub-agent per plan entry; "
-            f"each sub-agent invokes "
-            f"driver_invocation.script with the "
-            f"recorded argv.\n"
-            f"  (2) Re-run the missing entries' "
-            f"driver_invocation commands verbatim "
-            f"(every entry pins the same --run-id so "
-            f"artifacts land in the shared run "
-            f"directory).\n"
+            f"dispatches one sub-agent per directive; "
+            f"each sub-agent uses its Playwright MCP "
+            f"browser to navigate, run preconditions, "
+            f"submit case_input, and write the "
+            f"landing+after_submit screenshots and DOM "
+            f"snapshots to the directive's declared "
+            f"paths.\n"
+            f"  (2) Re-dispatch sub-agents for the "
+            f"missing directives. Every directive in "
+            f"this plan shares the same run_id so "
+            f"artifacts land in one run directory.\n"
             f"  (3) Once every case directory exists, "
             f"re-invoke score_agent.py with the same "
             f"plan path."
@@ -222,8 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     case_scores: list[CaseScore] = [
-        score_case(case=case, case_dir=entry.case_dir)
-        for entry, case in resolved
+        score_case(case=case, case_dir=directive.case_dir)
+        for directive, case in resolved
     ]
     agent_score: AgentScore = score_agent(
         case_scores=tuple(case_scores),

@@ -100,7 +100,71 @@ class Observability(StrictFrozen):
     otel: OtelSource | None = None
 
 
+class Precondition(StrictFrozen):
+    action: Literal["click", "select", "fill"]
+    selector: Annotated[
+        str,
+        Field(
+            min_length=1,
+            description=(
+                "CSS selector for the element the action "
+                "targets on the chat URL's initial page."
+            ),
+        ),
+    ]
+    value: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "Value the action sets. Required for "
+                "select (the option label or value) and "
+                "fill (the literal text). Omitted for "
+                "click."
+            ),
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _value_required_for_value_actions(
+        self,
+    ) -> "Precondition":
+        if (
+            self.action in ("select", "fill")
+            and self.value is None
+        ):
+            raise ValueError(
+                f"action {self.action!r} requires "
+                f"value to be set"
+            )
+        if (
+            self.action == "click"
+            and self.value is not None
+        ):
+            raise ValueError(
+                "action 'click' must not declare value"
+            )
+        return self
+
+
 class InteractionConfig(StrictFrozen):
+    preconditions: Annotated[
+        list[Precondition],
+        Field(
+            default_factory=list,
+            description=(
+                "Ordered actions the driver runs before "
+                "typing case.input — typically dropdown "
+                "selects or modal dismissals required to "
+                "reach a usable chat input on the agent's "
+                "URL. Each action targets a CSS selector "
+                "on the initial page; they run in "
+                "declaration order, with a short wait "
+                "between actions."
+            ),
+        ),
+    ]
     input_selector: Annotated[
         str | None,
         Field(
@@ -245,6 +309,7 @@ __all__ = [
     "LangfuseSource",
     "Observability",
     "OtelSource",
+    "Precondition",
     "Slug",
     "WebAccess",
 ]

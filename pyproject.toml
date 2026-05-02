@@ -5,7 +5,6 @@ description = "A Claude Skill for evaluating deployed agents by driving them thr
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.12",
-    "playwright>=1.48",
     "pydantic>=2.7",
     "pyyaml>=6",
 ]

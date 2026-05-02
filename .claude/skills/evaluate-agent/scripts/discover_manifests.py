@@ -47,6 +47,19 @@ def _parse_args(
     return parser.parse_args(argv)
 
 
+_BUNDLED_EXAMPLES_DIR = (
+    _SCRIPT_DIR.parent / "examples"
+).resolve()
+
+
+def _bundled_demo_manifest_paths() -> list[Path]:
+    if not _BUNDLED_EXAMPLES_DIR.is_dir():
+        return []
+    return sorted(
+        _BUNDLED_EXAMPLES_DIR.glob("*/agent.yaml")
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(
         sys.argv[1:] if argv is None else argv
@@ -59,10 +72,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if not outcomes:
+        bundled = _bundled_demo_manifest_paths()
         print(
             f"No manifests found under {args.root}.\n"
-            f"To proceed: confirm the directory contains an agent.yaml or *.agent.yaml file, "
-            f"or re-run discovery with a different root."
+            f"To proceed (pick one):\n"
+            f"  - Drop an agent.yaml (or *.agent.yaml) into the directory and re-run.\n"
+            f"  - Re-run discovery with a different root, e.g. a project subdirectory.\n"
+            f"  - Use one of the bundled demo manifests shipped with this skill"
+            f" (ask the user which one to evaluate before driving):\n"
+            + (
+                "".join(
+                    f"      - {path}\n" for path in bundled
+                )
+                if bundled
+                else ""
+            )
+            + f"  - Run /onboard-evaluate-agent to walk through writing"
+            f" your own agent.yaml interactively (one field at a time, with"
+            f" guidance on how to procure each value for whatever runtime"
+            f" and observability stack the agent uses), then re-invoke"
+            f" /evaluate-agent."
         )
         return 0
 

@@ -1,0 +1,36 @@
+{
+  "case_id": "timeoff_for_known_employee",
+  "summary": "The agent answered the date-bounded time-off question for alex.river, returning a single dated leave entry inside the requested window. The visible response in the post-submit DOM matches the manifest's final_response_contains assertion, so the user-facing behavior is correct. The four observability-driven assertions (must_call lookup_employee_record, must_call list_paid_leave_days, must_not_call list_direct_reports, max_steps) cannot be resolved because LangFuse credentials were not exported during the run, so no tool_calls.jsonl or step_count.json was landed under trace/observability/.",
+  "observations": [
+    {
+      "kind": "success_mode",
+      "claim": "The post-submit DOM contains the visible reply 'alex.river took time off on 20260118 between 2026-01-01 and 2026-03-31.', satisfying the final_response_contains assertion.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/trace/dom/step-002-after_submit.html",
+          "locator": "character offset 979 in extracted visible text"
+        }
+      ]
+    },
+    {
+      "kind": "behavior",
+      "claim": "The post-submit screenshot shows the agent rendered a Step 1 / Step 2 reasoning trail before emitting the final answer, consistent with a multi-step tool-using flow.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/step-002-after_submit.png",
+          "locator": "Show Reasoning panel"
+        }
+      ]
+    },
+    {
+      "kind": "failure_mode",
+      "claim": "Tool-use and step-count assertions resolved to inconclusive because LangFuse credentials were not exported, so no observability logs were fetched into trace/observability/ for the captured DOM to be correlated against.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_for_known_employee/step-001-landing.png",
+          "locator": "landing state baseline"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "case_id": "timeoff_with_multiple_days_in_range",
+  "summary": "The agent returned both expected leave dates for jordan.kim within the four-month window as a JSON-style list, satisfying the final_response_contains assertion via the post-submit DOM. The remaining four observability-driven assertions are inconclusive because LangFuse credentials were not exported and no trace/observability/ files were landed under the case directory; the agent's actual tool sequence and step count cannot be confirmed from the captured DOM alone.",
+  "observations": [
+    {
+      "kind": "success_mode",
+      "claim": "The post-submit DOM contains the visible reply enumerating both expected leave days, ['20260218', '20260301'], satisfying the final_response_contains assertion.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/trace/dom/step-002-after_submit.html",
+          "locator": "character offset 1041 in extracted visible text"
+        }
+      ]
+    },
+    {
+      "kind": "behavior",
+      "claim": "The post-submit screenshot shows the agent enumerated multiple dates in a structured list inside the response bubble, consistent with a list-paid-leave-days tool result being formatted into the final reply.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/step-002-after_submit.png",
+          "locator": "agent response bubble"
+        }
+      ]
+    },
+    {
+      "kind": "failure_mode",
+      "claim": "must_call lookup_employee_record, must_call list_paid_leave_days, must_not_call list_direct_reports, and max_steps all resolved to inconclusive because no observability logs were fetched into trace/observability/ during the run.",
+      "citations": [
+        {
+          "artifact_path": "/Users/nimo/Desktop/personal-dev/agentevaluator/runs/people-directory-demo/20260502T122456Z/timeoff_with_multiple_days_in_range/step-001-landing.png",
+          "locator": "landing state baseline"
+        }
+      ]
+    }
+  ]
+}

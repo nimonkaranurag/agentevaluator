@@ -2,13 +2,11 @@
 Expand a validated manifest into a deterministic per-case fan-out plan.
 """
 
-from .driver_invocation import DriverInvocation
-from .swarm_entry import SwarmEntry
+from .case_directive import CaseDirective
 from .swarm_plan import SwarmPlan, plan_swarm
 
 __all__ = [
-    "DriverInvocation",
-    "SwarmEntry",
+    "CaseDirective",
     "SwarmPlan",
     "plan_swarm",
 ]

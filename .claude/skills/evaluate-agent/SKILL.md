@@ -1,33 +1,36 @@
 ---
 name: evaluate-agent
-description: Evaluate a deployed web-accessible agent against scenarios declared in an agent.yaml manifest. Drives the agent through its user-facing web interface in a sandboxed Playwright browser, captures the full interaction trace, scores the trace against declared assertions, and produces a grounded analysis report. Invoke when the user asks to evaluate, benchmark, score, or test a deployed agent.
+description: Evaluate a deployed web-accessible agent against scenarios declared in an agent.yaml manifest. Drives the agent via the Playwright MCP server in a real, visible browser, captures landing + post-submit screenshots and DOM snapshots, scores them against declared assertions, and produces a citation-validated Markdown report. Invoke when the user asks to evaluate, benchmark, score, or test a deployed agent.
 ---
 
 # evaluate-agent
 
-You are the evaluate-agent skill. Your role is to help the user evaluate a deployed web agent by driving it through the user's declared scenarios in a sandboxed Playwright browser, capturing the full interaction trace, scoring the trace against declared assertions, and producing a grounded analysis report.
+You are the evaluate-agent skill. Your role is to drive a deployed web agent through the user's declared scenarios via the Playwright MCP server, capture screenshots and DOM snapshots at landing + post-submit, score them against declared assertions, and produce a grounded analytical report.
 
-The user drops an `agent.yaml` into their working directory and asks Claude to evaluate their agent. You discover the manifest, validate it, drive the agent, capture artifacts, score against declared assertions, and produce a report. The user is never required to learn CLI commands or configure observability.
+The user drops an `agent.yaml` into their working directory and asks Claude to evaluate their agent. You discover the manifest, validate it, drive the agent in a real visible browser, score against declared assertions, and produce a report. The user is never required to learn CLI commands or configure observability.
 
 ## Manifest
 
-`agent.yaml` is the single source of truth for every part of evaluation. It declares the agent's identity, how to reach it, the optional trace sources that enrich Playwright's baseline capture, and the scenarios to run. See [src/evaluate_agent/manifest/schema.py](src/evaluate_agent/manifest/schema.py) for the authoritative definition.
+`agent.yaml` is the single source of truth. It declares the agent's identity, how to reach it, the optional structured trace sources that enrich your captures, and the scenarios to run. See [src/evaluate_agent/manifest/schema.py](src/evaluate_agent/manifest/schema.py) for the authoritative definition.
 
 Top-level fields:
 
 - `name` — agent identifier (lowercase slug; becomes part of artifact paths under `runs/`).
 - `description` — free-form context that helps disambiguate when multiple agents share a directory.
 - `access.url` — the deployed agent's web entry point. Must be `http(s)://…`.
-- `access.auth` (optional) — declares which env vars hold credentials (`type: bearer` with `token_env`, or `type: basic` with `username_env` and `password_env`). NEVER embed literal secrets in the manifest.
-- `observability` (optional) — additional structured trace sources (Langfuse, OTEL). Playwright capture is the always-on baseline regardless of this section.
-- `interaction` (optional) — driver hints for the agent's web UI. `input_selector` is an optional CSS selector for the primary input field (when omitted, the driver falls back to the first visible `<textarea>`, then the first visible `<input type='text'>`). `response_wait_ms` (default 2000, bounded 0–120000) is the wait after submitting `case.input` before the post-submit screenshot.
-- `tools_catalog`, `agents_catalog` (optional) — when declared, case assertions are cross-validated against these at load time. An empty or omitted catalog disables the cross-check.
+- `access.auth` (optional, forward-compatible) — declares which env vars hold credentials. The Playwright MCP server does not currently honor manifest-declared auth; for agents that gate access at the URL level, document a precondition that navigates to a login URL or instruct the user to authenticate in their MCP browser session before driving.
+- `observability` (optional) — additional structured trace sources (LangFuse, OTEL). When declared, run `fetch_observability.py` after driving to populate the on-disk observability logs the four observability-driven assertion kinds consume.
+- `interaction.preconditions` (optional) — ordered actions you run after navigating to `access.url` and before typing `case.input`. Each is `{action: "click"|"select"|"fill", selector, value?}`. Use these to handle agent-picker dropdowns, modal dismissals, or any setup the chat URL needs before its input field is ready.
+- `interaction.input_selector` (optional) — CSS selector for the agent's primary input field. When omitted, fall back to the first visible `<textarea>`, then the first visible `<input type='text'>`.
+- `interaction.response_wait_ms` (default 2000, bounded 0–120000) — milliseconds to wait after submitting `case.input` before capturing the post-submit screenshot.
+- `tools_catalog`, `agents_catalog` (optional) — when declared, case assertions are cross-validated against these at load time.
 - `cases` — scenarios with `id`, `input`, and `assertions` (`must_call`, `must_not_call`, `must_route_to`, `max_steps`, `final_response_contains`).
 
 Examples:
 
 - Realistic synthetic manifest: [examples/flight-booking/agent.yaml](examples/flight-booking/agent.yaml).
 - Runnable smoke-test manifest, points at https://example.com: [examples/example-com/agent.yaml](examples/example-com/agent.yaml).
+- Full-stack demo (orchestrate runtime + LangFuse observability + native Python toolkit): [examples/hr-agent-watsonx-orchestrate/](examples/hr-agent-watsonx-orchestrate/).
 
 ## Invocations
 
@@ -47,40 +50,13 @@ uv run .claude/skills/evaluate-agent/scripts/validate_manifest.py <path-to-agent
 
 Parses `agent.yaml` and checks it against the schema. Prints a formal summary on success; prints every violation with a dotted path on failure. Exit 0 on success, 1 on any error.
 
-### Open the agent and capture artifacts for one case
-
-```
-uv run playwright install chromium                              # one-time, per machine
-uv run .claude/skills/evaluate-agent/scripts/open_agent.py <path-to-agent.yaml> --case <case_id> [--submit] [--runs-root <dir>] [--run-id <YYYYMMDDTHHMMSSZ>] [--headed]
-```
-
-Opens the declared URL in a sandboxed Chromium browser, resolves `access.auth` from the env vars named in the manifest (bearer or basic), navigates to the page, and captures `runs/<agent_name>/<run_id>/<case_id>/step-001-landing.png` paired with a full-DOM snapshot at `<case_dir>/trace/dom/step-001-landing.html`. With `--submit`: locates the primary input field (manifest-declared `interaction.input_selector` wins; otherwise heuristic fallback over `textarea:visible` then `input[type='text']:visible`), types `case.input`, presses Enter, waits `interaction.response_wait_ms`, and captures `step-002-after_submit.png` paired with `<case_dir>/trace/dom/step-002-after_submit.html`. `--case` must match one of the declared `cases[].id` values. `--run-id` reuses a pre-committed UTC timestamp (format `YYYYMMDDTHHMMSSZ`) so multiple invocations write into the same `runs/<agent>/<run_id>/` directory; when omitted, a fresh timestamp is captured at invocation time. Exit 0 on success, 1 on any manifest, auth, interaction, or driver error.
-
-Every invocation also writes baseline trace artifacts alongside the screenshots under `<case_dir>/trace/`:
-
-- `network.har` — HTTP archive of the full browser session (request/response bodies embedded).
-- `requests.jsonl` — streaming record of every outbound `request` event (method, URL, resource type, headers, UTC timestamp).
-- `responses.jsonl` — streaming record of every inbound `response` event (URL, status, status text, headers, UTC timestamp).
-- `console.jsonl` — streaming record of every page `console` message (type, text, source location, UTC timestamp).
-- `page_errors.jsonl` — streaming record of every uncaught `pageerror` (message, UTC timestamp).
-- `dom/step-<NNN>-<label>.html` — serialized rendered DOM (UTF-8 HTML) captured at each labeled screenshot point. Step number and label mirror the paired `.png` so a reader can cross-reference visual evidence with the programmatically inspectable DOM.
-- `dom/auto-<NNN>-nav.html` — serialized rendered DOM captured automatically on every main-frame navigation (`framenavigated` event). Covers redirects, server-side page transitions, and client-side SPA route changes that the labeled `step-*.html` captures would miss. The `auto-` and `step-` prefixes share the same `dom/` directory without colliding; the step counters are independent.
-- `auto-<NNN>-nav.png` — page screenshot captured automatically on every main-frame navigation (same `framenavigated` event that drives `dom/auto-*.html`). Lives at the case directory root alongside the labeled `step-<NNN>-<label>.png` captures; the `auto-` and `step-` prefixes share the directory without colliding and the step counters are independent. Pairs visual evidence with the structural DOM evidence at every navigation, so a report can cite both for any captured route change.
-- `dom/auto-<NNN>-pageerror.html` — serialized rendered DOM captured automatically on every uncaught page error (`pageerror` event). Pairs structural evidence with the matching `page_errors.jsonl` log row so a report can cite the screen state at the exact moment the agent's UI threw an uncaught JavaScript error. The step counter is independent from the navigation counter; both share the `dom/` directory without colliding because the `-nav` and `-pageerror` event suffixes disambiguate.
-- `auto-<NNN>-pageerror.png` — page screenshot captured automatically on every uncaught page error (same `pageerror` event that drives `dom/auto-*-pageerror.html`). Lives at the case directory root and pairs visual evidence with the structural DOM snapshot at the same step number for every uncaught error.
-- `observability/tool_calls.jsonl` — structured tool-call log consumed by the `must_call` and `must_not_call` evaluators. One JSON object per line; required fields are `tool_name` and `span_id`; optional fields are `arguments`, `result`, and `timestamp`. Populated by an upstream observability fetcher (LangFuse, OTEL, or hand-authored); when absent, the two tool-call assertion kinds resolve to `inconclusive` with a `recovery` procedure naming this exact path.
-- `observability/routing_decisions.jsonl` — structured routing-decision log consumed by the `must_route_to` evaluator. One JSON object per line; required fields are `target_agent` and `span_id`; optional fields are `from_agent`, `reason`, and `timestamp`. Same absent-→-inconclusive contract as `tool_calls.jsonl`.
-- `observability/step_count.json` — single JSON object consumed by the `max_steps` evaluator. Required fields are `total_steps` (non-negative integer) and `step_span_ids` (list whose length must equal `total_steps`). Same absent-→-inconclusive contract.
-
-The invocation's formal output block lists the absolute path to each trace artifact so downstream invocations can cite them directly, including one row per automatic DOM snapshot recorded under `dom/auto-*.html` and one row per automatic page screenshot recorded under `auto-*.png`. Automatic captures are listed in four sections, one per event-and-artifact pair: `nav_dom_snapshots` and `nav_screenshots` cover `framenavigated`-triggered captures; `page_error_dom_snapshots` and `page_error_screenshots` cover `pageerror`-triggered captures. A non-zero count under either `page_error_*` section is itself a signal that the agent's UI threw at least one uncaught JavaScript error during the run.
-
 ### Plan a swarm fan-out for every declared case
 
 ```
 uv run .claude/skills/evaluate-agent/scripts/plan_swarm.py <path-to-agent.yaml> [--runs-root <dir>]
 ```
 
-Expands the validated manifest into a deterministic JSON fan-out plan emitted to stdout. The plan carries one shared `run_id` and one entry per case; each entry contains the absolute `case_dir` and a complete `driver_invocation` (absolute script path plus argv) sufficient to drive that case in isolation. Every entry pins the same `--run-id`, so all sibling sub-agents write artifacts into the same `runs/<agent_name>/<run_id>/` directory. Entries appear in the order the cases were declared in the manifest. Exit 0 on success, 1 on any manifest load or validation error.
+Expands the manifest into a JSON `SwarmPlan`. Every directive is a self-contained brief for one Claude sub-agent: the URL to navigate to, the preconditions, the case input, the input selector, the response wait, and the absolute paths under `<runs_root>/<agent>/<run_id>/<case_id>/` where the sub-agent must write its landing + post-submit screenshots and DOM snapshots. Every directive shares the same `run_id` so all sub-agents land artifacts in one run directory. Exit 0 on success, 1 on any manifest error.
 
 ### Fetch upstream observability into the standard on-disk format
 
@@ -88,21 +64,7 @@ Expands the validated manifest into a deterministic JSON fan-out plan emitted to
 uv run .claude/skills/evaluate-agent/scripts/fetch_observability.py <path-to-agent.yaml> --case <case_id> --case-dir <path-to-case-dir> [--session-id <id>] [--since <ISO timestamp>] [--until <ISO timestamp>]
 ```
 
-Reads `manifest.observability.langfuse`, resolves the public/secret key env vars the manifest names, queries the declared LangFuse host for traces matching the case, maps each trace's observations to the on-disk observability schema, and persists them under `<case-dir>/trace/observability/`. The four observability-driven assertion kinds (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) consume those files directly — running this script is what turns those four kinds from inconclusive into passed/failed for an agent instrumented with LangFuse.
-
-Trace selection:
-
-- `--session-id` filters traces whose LangFuse `session_id` matches. Defaults to the case id, so the instrumentation contract is `langfuse.update_current_trace(session_id=<case_id>)` (or the SDK equivalent) on every trace the agent emits while serving the case. When the case id collides with traces from earlier runs, narrow with `--since` / `--until` (ISO-8601 timestamps; both bounds inclusive).
-
-LangFuse-to-on-disk mapping:
-
-- `Observation.type == "TOOL"` — one row appended to `tool_calls.jsonl`. `tool_name` = `Observation.name`; `span_id` = `Observation.id`; `arguments` = `Observation.input` when it is a JSON object (otherwise omitted); `result` = `Observation.output` stringified; `timestamp` = `Observation.start_time` ISO-8601.
-- `Observation.type == "AGENT"` — one row appended to `routing_decisions.jsonl`. `target_agent` = `Observation.name`; `span_id` = `Observation.id`; `from_agent` = the parent AGENT observation's `name` when the parent is itself an AGENT (omitted at the root); `reason` = `Observation.metadata["reason"]` when present; `timestamp` = `Observation.start_time` ISO-8601.
-- `Observation.type == "GENERATION"` — one entry per LLM call appended to the `step_span_ids` ordered list inside `step_count.json`. `total_steps` = the count of GENERATION observations on the trace.
-
-Observations missing required fields (`name` for TOOL/AGENT, `id` for any kind) are silently skipped — the on-disk schema requires those fields and a partial entry would mask malformed instrumentation behind silently-wrong scores. Counts in the formal output block surface the skip rate so the user can audit instrumentation.
-
-Exit 0 once the fetch completes regardless of trace or observation count (a successful fetch with zero traces still writes empty logs so the scoring layer's downstream evaluators distinguish "no calls observed" from "log not written"). Exit 1 on any manifest load error, unknown `--case` id, missing / non-directory `--case-dir`, manifest with no `observability.langfuse` block, missing credential env var, or LangFuse query failure — each with a numbered recovery procedure on stderr.
+Reads `manifest.observability.langfuse`, queries the declared host for traces matching the case (filtered by `--session-id`, defaulting to the case id), maps each trace's observations to the on-disk schema, and persists `tool_calls.jsonl`, `routing_decisions.jsonl`, and `step_count.json` under `<case-dir>/trace/observability/`. Mapping convention: `Observation.type == "TOOL"` → `tool_calls.jsonl`; `Observation.type == "AGENT"` → `routing_decisions.jsonl` (with parent AGENT name as `from_agent`); count of `Observation.type == "GENERATION"` → `step_count.json`. Exit 0 once the fetch completes regardless of trace count; exit 1 on missing credentials, missing manifest block, or LangFuse query failure.
 
 ### Score a captured case against its declared assertions
 
@@ -110,22 +72,20 @@ Exit 0 once the fetch completes regardless of trace or observation count (a succ
 uv run .claude/skills/evaluate-agent/scripts/score_case.py <path-to-agent.yaml> --case <case_id> --case-dir <path-to-case-dir>
 ```
 
-Reads the case from the validated manifest, evaluates each declared assertion against artifacts under `--case-dir`, and emits a JSON `CaseScore` record to stdout. Each per-assertion outcome is one of:
+Reads the case from the validated manifest, evaluates each declared assertion against artifacts under `--case-dir`, and emits a JSON `CaseScore` to stdout. Each per-assertion outcome is one of:
 
-- `passed` — the assertion holds against the captured trace. Carries a citation (`evidence.artifact_path` plus a `detail` locator) that resolves to a real captured file.
-- `failed` — the assertion does not hold against the captured trace. Carries the same citation shape plus the `expected` and `observed` values for the discrepancy.
-- `inconclusive` — the captured trace lacks the structural evidence required to evaluate the assertion. Carries a discriminated `reason` naming the missing evidence (`dom_snapshot_unavailable` when the post-submit DOM is absent; `observability_source_missing` when the manifest does not declare the trace source the assertion needs) plus a numbered `recovery` procedure the caller follows to make the assertion evaluable on a subsequent run.
+- `passed` — the assertion holds; carries an `evidence.artifact_path` pointing at the captured file plus a `detail` locator.
+- `failed` — the assertion does not hold; carries the same citation shape plus `expected` and `observed`.
+- `inconclusive` — the captured trace lacks the structural evidence the assertion needs; carries a discriminated `reason` naming the missing evidence and a numbered `recovery` procedure.
 
 Resolvable assertions:
 
-- `final_response_contains` matches the expected substring against visible text extracted from the post-submit DOM snapshot (`<case-dir>/trace/dom/step-<NNN>-after_submit.html`), with `<script>`, `<style>`, `<noscript>`, `<template>`, and HTML comments stripped before matching.
-- `must_call` and `must_not_call` consume `<case-dir>/trace/observability/tool_calls.jsonl`. Each entry is one tool invocation with required `tool_name` and `span_id`. `must_call` passes on the first entry whose `tool_name` matches the assertion target (citing the line number and span id); fails when the target is absent. `must_not_call` is the inverse — passes when the target is absent across every logged entry; fails on the first entry whose `tool_name` matches.
-- `must_route_to` consumes `<case-dir>/trace/observability/routing_decisions.jsonl`. Each entry is one routing decision with required `target_agent` and `span_id`. Passes on the first entry whose `target_agent` matches; fails when absent.
-- `max_steps` consumes `<case-dir>/trace/observability/step_count.json`. The single record carries `total_steps` and `step_span_ids` (matching length). Passes when `total_steps <= step_limit`; fails otherwise.
+- `final_response_contains` matches the substring against visible text extracted from `<case-dir>/trace/dom/step-NNN-after_submit.html`, with `<script>`, `<style>`, `<noscript>`, `<template>`, and HTML comments stripped before matching.
+- `must_call` / `must_not_call` consume `<case-dir>/trace/observability/tool_calls.jsonl`.
+- `must_route_to` consumes `<case-dir>/trace/observability/routing_decisions.jsonl`.
+- `max_steps` consumes `<case-dir>/trace/observability/step_count.json`.
 
-When an observability log is absent the corresponding assertions resolve to `inconclusive` whose `reason.needed_evidence` names the missing trace source and `reason.expected_artifact_path` names the absolute path under `<case-dir>` where the log must land for the assertion to become evaluable on a subsequent run. When a log is present but malformed (invalid JSON or schema violation), the assertions resolve to `inconclusive` whose `reason.kind` is `observability_log_malformed` and whose `recovery` procedure names the offending file, line number (for JSONL), and parse error.
-
-Exit 0 once scoring completes, regardless of pass / fail / inconclusive counts. Exit 1 only on manifest load errors, an unknown `--case` id, or a missing / non-directory `--case-dir`.
+When an observability log is absent the corresponding assertions resolve to `inconclusive` with `reason.expected_artifact_path` naming where the log must land. Exit 0 once scoring completes regardless of pass/fail/inconclusive counts; exit 1 on manifest, case-id, or case-dir errors.
 
 ### Aggregate every captured case in a swarm plan into one agent score
 
@@ -133,15 +93,7 @@ Exit 0 once scoring completes, regardless of pass / fail / inconclusive counts. 
 uv run .claude/skills/evaluate-agent/scripts/score_agent.py <path-to-plan.json>
 ```
 
-Reads a swarm plan produced by `plan_swarm.py`, loads the manifest the plan references, scores every entry's case via `score_case`, and emits a JSON `AgentScore` record to stdout. The record carries every per-case `CaseScore` plus a deterministic `rollup` that aggregates outcomes along three dimensions:
-
-- `rollup.by_assertion_kind` — one row per assertion kind that had at least one outcome, listed in the schema order `final_response_contains`, `must_call`, `must_not_call`, `must_route_to`, `max_steps`. Each row has `total / passed / failed / inconclusive` counts across every case.
-- `rollup.by_target` — one row per `(assertion_kind, target)` pair for the per-target kinds (`must_call`, `must_not_call`, `must_route_to`). Sorted by assertion kind in schema order, then by target lexicographically. Each row has the same four counts; targets that appear in multiple cases sum across them.
-- `rollup.cases` — case-granularity counts: `total`, `fully_passed` (cases whose every assertion outcome was `passed`), `with_any_failure` (cases with at least one failed outcome), `with_any_inconclusive` (cases with at least one inconclusive outcome — overlaps with `with_any_failure` when a case has both), `with_no_assertions` (cases that declared zero assertions and therefore have zero outcomes — mutually exclusive with `fully_passed`).
-
-`rollup` also carries top-level `total_assertions / passed / failed / inconclusive` counts that partition every outcome across every case. The composition is deterministic: the same set of `CaseScore` records always produces the same `AgentScore` byte-for-byte.
-
-Exit 0 once aggregation completes, regardless of pass / fail / inconclusive counts. Exit 1 on a missing or malformed plan file, a manifest load error, a plan that references case ids the manifest does not declare, or any case directory in the plan that does not exist on disk.
+Reads a swarm plan, scores every directive's case via `score_case` internally, and emits a JSON `AgentScore` with deterministic rollups (`by_assertion_kind`, `by_target`, `cases`) plus top-level totals.
 
 ### Validate a case narrative against its bound score
 
@@ -149,12 +101,7 @@ Exit 0 once aggregation completes, regardless of pass / fail / inconclusive coun
 uv run .claude/skills/evaluate-agent/scripts/validate_narrative.py <path-to-narrative.json> --score <path-to-case-score.json>
 ```
 
-Loads a `CaseNarrative` JSON file and a `CaseScore` JSON file, checks two invariants, and prints a formal block on success.
-
-- The narrative's `case_id` matches the score's `case_id`. A narrative for one case must never be embedded in another case's report.
-- Every citation inside the narrative resolves to a regular file under the score's `case_dir`. Citations that do not resolve to a real file fail with `path_does_not_exist`. Citations that resolve to a real file outside `case_dir` fail with `path_outside_case_directory`. Every failure is enumerated in stderr with a dotted path locating the offending citation inside the narrative document.
-
-Exit 0 when the narrative is grounded; exit 1 on any narrative-grounding violation, a malformed or missing narrative file, or any error loading the score.
+Loads a `CaseNarrative` JSON and a `CaseScore` JSON, checks that the narrative's `case_id` matches and that every citation resolves to a real file under the score's `case_dir`, and prints a formal block on success. Exit 0 when grounded; exit 1 on any narrative-grounding violation.
 
 ### Render a score record as a Markdown report
 
@@ -162,66 +109,67 @@ Exit 0 when the narrative is grounded; exit 1 on any narrative-grounding violati
 uv run .claude/skills/evaluate-agent/scripts/render_report.py <path-to-score.json> [--narrative <case-narrative.json>] [--narratives-dir <narratives-dir>]
 ```
 
-Reads a JSON score file produced by `score_case.py` (`CaseScore`) or `score_agent.py` (`AgentScore`), verifies that every cited artifact path inside the record resolves to a real file or directory on disk, and emits a Markdown narrative to stdout. The script autodetects the record type by the presence of the top-level `agent_name` field. Every cited artifact path appears verbatim in the rendered report so a reader can open the file and inspect the underlying evidence; the structural integrity check guarantees no rendered citation points at a missing artifact.
-
-For an `AgentScore`, the report is structured as: an `H1` header naming the agent, run id, manifest path, and runs root; a `## Summary` row with assertion totals; a `## By assertion kind` table listing each kind in schema order with its passed/failed/inconclusive counts; a `## By target` table for the per-target kinds (`must_call`, `must_not_call`, `must_route_to`); a `## By case` row with case-granularity counts; and a `## Per-case detail` section that renders each case as `H3` with its assertion outcomes. Sections that have no rows (e.g. `## By target` when no per-target assertions exist) are omitted.
-
-For a `CaseScore`, the report is structured as: an `H1` header naming the case with a one-line summary of pass/fail/inconclusive counts; the case directory; and a list of every assertion outcome. Each `passed` outcome cites its `evidence.artifact_path`; each `failed` outcome lists `expected` and `observed` plus the evidence path; each `inconclusive` outcome names the reason kind and relays the recovery procedure verbatim.
-
-`--narrative <path>` (CaseScore only) embeds an analytical narrative under the rendered case section; the renderer verifies that the narrative's `case_id` matches and that every narrative citation resolves under the score's `case_dir` before composing. `--narratives-dir <dir>` (AgentScore only) loads per-case narrative files keyed by `<case_id>.json` from the directory; cases without a corresponding file render without an analytical section, and any narrative whose `case_id` is not declared in the score is rejected. The two flags are mutually exclusive — pick the one that matches the score type.
-
-Exit 0 once rendering completes. Exit 1 on a missing or malformed score file, a record that does not validate against either the `CaseScore` or `AgentScore` schema, any unresolved citation reported by the structural integrity check, or any narrative-grounding violation surfaced by `--narrative` or `--narratives-dir` (each with a numbered recovery procedure on stderr).
+Reads a `CaseScore` or `AgentScore` JSON, verifies that every cited artifact path resolves on disk, and emits Markdown to stdout. `--narrative` (CaseScore only) and `--narratives-dir` (AgentScore only) embed analytical narratives whose citations the renderer also validates. Exit 0 on success; exit 1 on any unresolved citation or narrative-grounding violation.
 
 ## When the user asks to evaluate an agent — CRITICAL
 
 Follow these steps in order. Do not skip or reorder them.
 
-1. **Locate the manifest.** Run `discover_manifests.py` against the working directory. If it reports exactly one valid manifest, use that path. If it reports multiple, list the paths with their `name` and `description` and ask the user which one to evaluate — do not guess. If it reports zero manifests, relay the formatter's output to the user and STOP. If it reports any invalid manifest, relay the formatter's stderr verbatim and STOP.
+1. **Locate the manifest.** Run `discover_manifests.py` against the working directory. If exactly one valid manifest, use it. If multiple, list paths + name + description and ask which to evaluate. If zero, relay the formatter's output (it lists bundled demo manifests + suggests `/onboard-evaluate-agent`) and STOP. If any invalid, relay stderr verbatim and STOP.
 
-2. **Validate the chosen manifest.** Run `validate_manifest.py` against the chosen path to confirm it parses cleanly in isolation. If validation fails, relay the validator's stderr to the user verbatim and STOP. A partially valid manifest is never passed downstream.
+2. **Validate the chosen manifest.** Run `validate_manifest.py`. If it fails, relay stderr verbatim and STOP.
 
-3. **Summarise what was validated.** Report back to the user: agent name, number of cases, declared tool count, declared sub-agent count. This confirms which agent you loaded.
+3. **Summarise what was validated.** Report agent name, number of cases, declared tool count, declared sub-agent count.
 
-4. **Drive the manifest.** Branch on the user's request:
-    - **A specific case named by the user, OR a manifest with one declared case.** Invoke `open_agent.py` directly with `--submit` and that case id. Without `--submit`, the invocation captures the landing view only — use this only when the user asks for a screenshot, to "see" the agent, or to verify access works. If the user did not specify a case id and the manifest declares more than one, list the declared ids and ask before proceeding.
-    - **The whole agent (every declared case).** Invoke `plan_swarm.py` to expand the manifest into a JSON fan-out plan. Parse the plan's `entries` array. Dispatch one Agent sub-task per entry IN A SINGLE MESSAGE so every case runs in parallel under its own isolated browser context. Each sub-task's prompt must instruct the sub-agent to invoke the entry's `driver_invocation.script` with the entry's `driver_invocation.arguments` exactly as supplied — do NOT modify the argv. Every entry's argv pins the same `--run-id`, so all sibling sub-agents write into one shared `runs/<agent>/<run_id>/` directory. After all sub-tasks complete, compose results from the captured artifacts under each entry's `case_dir`; never re-run a case at the orchestrator level.
-    - **In every branch:** if the manifest declares `access.auth` and the required env vars are not set, relay the `MissingAuthEnvVar` message verbatim — do not proceed without credentials. If `InputElementNotFound` is raised, relay it verbatim — the user must either set `interaction.input_selector` or correct it to match a visible element.
+4. **Drive the manifest via the Playwright MCP server — CRITICAL.** Branch on the user's request:
 
-5. **Fetch upstream observability — CONDITIONAL on `manifest.observability.langfuse`.** If the manifest declares `observability.langfuse`, invoke `fetch_observability.py <manifest> --case <case_id> --case-dir <case_dir>` once per driven case. The script writes `tool_calls.jsonl`, `routing_decisions.jsonl`, and `step_count.json` under `<case_dir>/trace/observability/` so the four observability-driven assertion kinds (`must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to passed/failed in the next step instead of inconclusive. Branch on which driver invocation step 4 ran:
-    - **Single case.** One invocation against the captured `case_dir`.
-    - **Whole agent (swarm).** One invocation per plan entry's `case_dir`. Dispatch them in parallel (one Agent sub-task per case, all sub-tasks in a single message) for the same reason the swarm itself runs in parallel — each fetch is independent and the LangFuse host tolerates concurrent reads.
-    - **Skip this step entirely** when `manifest.observability.langfuse` is null. The four observability-driven assertions then resolve to `inconclusive` in step 6 with a `recovery` procedure naming the absent log path. Do NOT invoke `fetch_observability.py` against a manifest with no langfuse block; the script exits 1 with `LangfuseSourceNotDeclared`.
-    - **In every branch:** if the credential env vars the manifest names are not set, relay the `LangfuseCredentialEnvVarMissing` message verbatim — do not proceed without credentials. If the LangFuse host is unreachable or the query fails, relay the `LangfuseQueryFailed` recovery procedure verbatim — do not silently fall through to scoring with empty observability logs. The script's formal output block reports the trace, observation, and per-kind counts so a sub-100% transformation rate (observations skipped due to missing required fields) is visible without parsing files.
+    - **A specific case named by the user, OR a manifest with one declared case.** You drive that one case directly via the Playwright MCP server, following the per-case procedure below. Use the manifest's `interaction` block + the case's `input` + the path layout under `runs/<agent>/<run_id>/<case_id>/`.
 
-6. **Score every driven case.** Branch on which driver invocation step 4 ran:
-    - **Single case (`open_agent.py` direct).** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`). The persisted file is the input to step 8.
-    - **Whole agent (`plan_swarm.py` + sub-agent fan-out).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every case in the plan internally; do NOT run `score_case.py` per entry separately. The persisted file is the input to step 8.
+    - **The whole agent (every declared case).** Run `plan_swarm.py` to expand the manifest into a JSON `SwarmPlan`. Parse the `directives` array. **Dispatch one Agent sub-task per directive IN A SINGLE MESSAGE** so every case runs in parallel — but each sub-task MUST be assigned a unique Playwright MCP pool slot so its browser is isolated from every sibling sub-task's browser. Without slot assignment, all sub-tasks would type into and screenshot the SAME browser tab and corrupt every capture.
 
-7. **Synthesize a per-case analytical narrative — CRITICAL.** For every case driven and scored in step 4 + 6, compose a `CaseNarrative` JSON file that explains WHY the case passed, failed, or was inconclusive. The narrative is the analytical layer the rendered report embeds; without it the report is a metric dump.
+      **Pool-slot assignment:**
 
-    - **Schema.** `case_id` (matches the score), `summary` (one paragraph), and `observations` (one or more grounded statements). Each observation has a `kind` (`behavior`, `tool_use`, `routing`, `failure_mode`, `success_mode`), a one-sentence factual `claim`, and one or more `citations`. Each citation is a `{artifact_path, locator?}` pair pointing at a real captured file under the case directory. The authoritative schema is at [src/evaluate_agent/case_narrative/schema.py](src/evaluate_agent/case_narrative/schema.py).
-    - **Ground every claim — CRITICAL.** Every observation MUST cite at least one captured artifact under the case directory. Citations MUST be absolute paths to files that already exist on disk (the screenshots, DOM snapshots, trace JSONL files, and observability logs the driver produced). NEVER invent a path; the validator rejects narratives whose citations do not resolve.
-    - **Stay inside the case directory — CRITICAL.** Citations MUST live under the case's `case_dir`. A narrative for case A must never cite an artifact captured for case B; the validator rejects cross-case citations.
-    - **Claim only what the evidence shows — CRITICAL.** Each `claim` is a factual statement directly supported by the cited evidence. Do NOT speculate about behavior the captured artifacts do not show. Do NOT pattern-match against memory of how similar agents typically behave. The narrative explains, it does not extrapolate.
-    - **Persist the narrative.**
-        - Single case: write the JSON to `<case_dir>/narrative.json`.
-        - Whole agent: write one file per case to `<runs_root>/<agent>/<run_id>/narratives/<case_id>.json`. Use the same case ids the score record declares.
-    - **Validate before rendering.** For every persisted narrative, run `validate_narrative.py <narrative.json> --score <case_score.json>`. If the validator exits 1, relay its stderr verbatim to the user, fix the failing citations, and re-validate before proceeding to step 8. The validator is the structural anti-hallucination guarantee; never bypass it.
+      1. The repo's `.mcp.json` declares a pool of MCP server instances named `playwright-pool-0`, `playwright-pool-1`, ... up to the pool size (default 8). Each pool slot is its own Node process with its own Chromium browser; their tools are exposed as `mcp__playwright-pool-<N>__browser_navigate`, `mcp__playwright-pool-<N>__browser_click`, `mcp__playwright-pool-<N>__browser_take_screenshot`, `mcp__playwright-pool-<N>__browser_evaluate`, etc.
+      2. For directive index `i` in the plan, assign pool slot `i % POOL_SIZE` (round-robin). When the directive count exceeds `POOL_SIZE`, dispatch the first `POOL_SIZE` directives in one message, wait for completion, then dispatch the next batch — never overcommit a slot to two concurrent sub-tasks.
+      3. Each sub-task's prompt MUST contain the directive's full JSON object verbatim, the per-case driving procedure below, AND an explicit instruction naming the assigned pool slot — for example: *"You MUST use the `mcp__playwright-pool-3__*` tools exclusively. Do NOT call any other `mcp__playwright-pool-*` prefix; sibling sub-tasks own those slots and concurrent calls will corrupt their captures."*
+      4. After every sub-task completes, compose results from the captured artifacts under each directive's `case_dir` — never re-drive a case at the orchestrator level.
 
-8. **Render the score record as a Markdown report.** Invoke `render_report.py <path-to-score.json>` against the file written in step 6, and pass the synthesized narrative(s) from step 7:
-    - Single case: `render_report.py <case-score.json> --narrative <case_dir>/narrative.json`.
-    - Whole agent: `render_report.py <agent-score.json> --narratives-dir <runs_root>/<agent>/<run_id>/narratives`.
+      **Pool-size override.** If a manifest's case count routinely exceeds 8, the user can scale the pool by adding more `playwright-pool-N` entries to [`.mcp.json`](../../../.mcp.json). Each idle slot is a sleeping Node process; Chromium is launched lazily on first navigate.
 
-    The script autodetects the record type (`CaseScore` vs `AgentScore`), verifies that every cited artifact path inside the score resolves on disk, verifies each supplied narrative against its bound case score, and emits a structured Markdown narrative to stdout. Relay the rendered Markdown to the user verbatim — every artifact citation is a real path the user can open, the recovery procedure for every inconclusive outcome is inlined in the rendered report, and every analytical claim is grounded in a citation that resolves on disk. If the script raises `UnresolvedCitationError`, `NarrativeCaseMismatchError`, `NarrativeCitationsUnresolvedError`, or `NarrativeUnknownCaseIdsError`, relay the stderr recovery procedure to the user verbatim and STOP.
+    **Per-case driving procedure (used in both branches):**
 
-9. **Drill into specific failures or inconclusives if the user asks.** When the user asks "why did X fail?" or "what evidence supports Y?", open the cited artifact path from the rendered report (the screenshot, the DOM snapshot, the trace JSONL line) and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
+    1. Open the agent by calling the assigned pool slot's browser_navigate tool against `directive.url` (or `manifest.access.url` for the single-case branch). The MCP pool is wired in this repo's `.mcp.json` so Claude Code spawns every pool-slot server on session start (the user approves the servers on first run; thereafter it's automatic). For the **single-case branch**, use any one slot — `mcp__playwright-pool-0__browser_*` is fine. For the **swarm branch**, use the slot the orchestrator assigned to your sub-task verbatim — never call a different slot's tools, that's a sibling's browser. The browser window is visible to the user — they MUST be able to watch what you do. If MCP tools are not present in your session, tell the user the Playwright MCP pool hasn't been approved yet and ask them to accept the servers from the Claude Code MCP prompt; do not try to substitute a Bash-driven script.
+    2. Run every action in `interaction.preconditions` in declared order — `click` against the selector, `select` choosing the value, or `fill` typing the value. Wait briefly between actions for the UI to settle. Preconditions exist exactly because some chat UIs require a setup step (agent dropdown picker, modal dismissal) before the input field is usable; if a precondition is declared, you MUST run it before proceeding.
+    3. Take a landing screenshot via the MCP server and persist it to the directive's `landing_screenshot_path` (or the layout's `step-001-landing.png` for the single-case branch). The MCP browser tool typically writes to disk directly when given a `path`; if it returns image bytes, use the Write tool to save them.
+    4. Read the landing DOM by evaluating `document.documentElement.outerHTML` in the MCP browser and use the Write tool to save the returned string to the directive's `landing_dom_snapshot_path` (or `<case_dir>/trace/dom/step-001-landing.html`).
+    5. Locate the agent's input field. If `interaction.input_selector` is declared, use it verbatim. Otherwise try `textarea:visible`, then `input[type='text']:visible`. If none match, STOP and tell the user the input field could not be located — name the selectors tried and ask the user to add or correct `interaction.input_selector`.
+    6. Type `case.input` into the located element and press Enter.
+    7. Wait `interaction.response_wait_ms` milliseconds (default 2000).
+    8. Take a post-submit screenshot and persist it to the `after_submit_screenshot_path` (or `step-002-after_submit.png`).
+    9. Read the post-submit DOM (`document.documentElement.outerHTML`) and write it to `after_submit_dom_snapshot_path` (or `<case_dir>/trace/dom/step-002-after_submit.html`). The scoring layer reads this exact file to evaluate `final_response_contains` — if you skip it, that assertion resolves to inconclusive.
 
-10. **Never invent results — CRITICAL.** Every claim you make about the agent's behaviour MUST be backed by an artifact produced by an invocation above. Do not describe tool calls, routing decisions, assertion outcomes, metrics, or summaries unless they appear in a real captured artifact at a real path under `runs/` or in a `CaseScore` / `AgentScore` record returned by the scoring scripts and rendered by `render_report.py`. If an invocation does not exist for what the user is asking for, say so plainly and offer the invocations that do exist.
+    **In every branch:** if the manifest declares `access.auth` and the agent's URL gates access on it, the Playwright MCP browser does not honor declared auth. Either ask the user to authenticate in the MCP browser session before driving, or re-shape the manifest so a `precondition` navigates to the login URL with credentials. Do NOT silently proceed if you cannot reach the chat input.
+
+5. **Fetch upstream observability — CONDITIONAL on `manifest.observability.langfuse`.** If the manifest declares `observability.langfuse`, invoke `fetch_observability.py <manifest> --case <case_id> --case-dir <case_dir>` once per driven case. The script writes `tool_calls.jsonl`, `routing_decisions.jsonl`, and `step_count.json` under `<case_dir>/trace/observability/` so the four observability-driven assertion kinds resolve to passed/failed in the next step instead of inconclusive. For the swarm branch, dispatch one fetch per directive in parallel. Skip this step entirely when `manifest.observability.langfuse` is null.
+
+6. **Score every driven case.** Branch on which step-4 path ran:
+    - **Single case.** Invoke `score_case.py <manifest> --case <case_id> --case-dir <case_dir>` and redirect stdout to a file (e.g. `<case_dir>/score.json`).
+    - **Whole agent (swarm).** Invoke `score_agent.py <path-to-plan.json>` and redirect stdout to a file (e.g. `<runs_root>/<agent>/<run_id>/score.json`). The script scores every directive's case internally; do NOT run `score_case.py` per directive separately.
+
+7. **Synthesize a per-case analytical narrative — CRITICAL.** For every case driven and scored, compose a `CaseNarrative` JSON file that explains WHY the case passed, failed, or was inconclusive. Schema in [src/evaluate_agent/case_narrative/schema.py](src/evaluate_agent/case_narrative/schema.py). Every observation MUST cite at least one captured artifact under the case directory (the screenshot, DOM snapshot, or observability log produced in steps 4–5). NEVER invent a path; the validator rejects narratives whose citations do not resolve. Persist to `<case_dir>/narrative.json` (single case) or `<runs_root>/<agent>/<run_id>/narratives/<case_id>.json` (swarm). Validate via `validate_narrative.py` before rendering.
+
+8. **Render the score record as a Markdown report.** Invoke `render_report.py` against the persisted score file, passing `--narrative <path>` (single case) or `--narratives-dir <dir>` (swarm). The script verifies every cited path resolves on disk and emits Markdown to stdout. Relay it verbatim.
+
+9. **Drill into specific failures or inconclusives if the user asks.** Open the cited artifact path from the rendered report and ground your answer in that file's contents. Do NOT pattern-match against memory of how agents typically behave; the captured evidence is the only authoritative source for any claim about this run.
+
+10. **Never invent results — CRITICAL.** Every claim about the agent's behaviour MUST be backed by an artifact captured in step 4 or fetched in step 5. Do not describe tool calls, routing decisions, or assertion outcomes that do not appear in a real captured file at a real path under `runs/`. If an invocation does not exist for what the user is asking for, say so plainly.
 
 ## Design principles
 
 - **Web-only access.** A PM who builds an agent in a UI should not need a CLI to evaluate it.
-- **Observability is opt-in.** Playwright capture (network HAR, page event streams, screenshots) is the always-on baseline; declared sources under `observability` only enrich it. Do not ask the user to configure tracing.
-- **Deterministic sub-flows.** Every sub-flow that can be scripted is a Python script invoked directly. Your role is only the parts that genuinely need judgment (analytical synthesis in the report).
-- **Grounded output.** When producing narrative, every claim cites a concrete artifact — a screenshot path, a trace span id, or a manifest field.
+- **Visible browser-driven.** Every step you take is a Playwright MCP tool call against a real browser the user can watch. If the user sees a wrong dropdown selected or a stuck modal, they SEE it, and you can react via the next MCP call.
+- **Per-sub-agent isolation.** In the swarm branch, each Agent sub-task gets its own MCP browser context — no shared state between cases. This is what makes the parallelism safe.
+- **Observability is opt-in.** Captured screenshots + post-submit DOM are the always-on evidence the scoring layer reads; declared sources under `observability` only enrich it via `fetch_observability.py`. Do not ask the user to configure tracing.
+- **Deterministic sub-flows.** Discovery, validation, planning, scoring, and rendering are pure-Python scripts you invoke directly. Your judgment is reserved for two places: the live MCP-driven driving in step 4, and the analytical narrative synthesis in step 7.
+- **Grounded output.** Every claim in any narrative cites a concrete artifact — a screenshot path, a DOM snapshot path, or an observability log span id.
 - **Structural anti-hallucination.** Hallucination in the analytical narrative is blocked by structure, not by prompting. Every observation in a `CaseNarrative` declares its citations as artifact paths; the citation validator rejects narratives whose paths do not resolve to real files under the bound case directory. The renderer rejects narratives whose `case_id` does not match the score they are embedded in.

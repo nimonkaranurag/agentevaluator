@@ -1,5 +1,5 @@
 """
-SwarmPlan record + plan_swarm composer.
+SwarmPlan record + plan_swarm composer for MCP-driven case fan-out.
 """
 
 from __future__ import annotations
@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Annotated
 
 from evaluate_agent.artifact_layout import (
+    LANDING_LABEL,
+    POST_SUBMIT_LABEL,
     RunArtifactLayout,
     parse_run_id,
 )
@@ -19,14 +21,10 @@ from evaluate_agent.manifest.schema import (
 )
 from pydantic import AfterValidator, Field
 
-from .driver_invocation import DriverInvocation
-from .swarm_entry import SwarmEntry
+from .case_directive import CaseDirective
 
-_DEFAULT_DRIVER_SCRIPT = (
-    Path(__file__).resolve().parents[3]
-    / "scripts"
-    / "open_agent.py"
-)
+_LANDING_STEP_NUMBER = 1
+_POST_SUBMIT_STEP_NUMBER = 2
 
 
 def _run_id_validator(value: str) -> str:
@@ -42,10 +40,9 @@ class SwarmPlan(StrictFrozen):
             description=(
                 "Shared run timestamp committed at plan "
                 "generation time. Format: "
-                "YYYYMMDDTHHMMSSZ (UTC). Every entry's "
-                "driver invocation reuses this id so all "
-                "swarm artifacts land in a single run "
-                "directory."
+                "YYYYMMDDTHHMMSSZ (UTC). Every directive "
+                "in this plan writes artifacts under "
+                "<runs_root>/<agent_name>/<run_id>/."
             ),
         ),
     ]
@@ -77,16 +74,17 @@ class SwarmPlan(StrictFrozen):
             ),
         ),
     ]
-    entries: Annotated[
-        tuple[SwarmEntry, ...],
+    directives: Annotated[
+        tuple[CaseDirective, ...],
         Field(
             min_length=1,
             description=(
-                "One entry per case declared in the "
-                "manifest, in declaration order. Each "
-                "entry is self-contained — a sub-agent "
-                "executes its case using only the "
-                "entry's driver_invocation."
+                "One CaseDirective per case declared in "
+                "the manifest, in declaration order. "
+                "Each directive is self-contained and "
+                "MUST be dispatched to its own Claude "
+                "sub-agent so every case runs in its own "
+                "isolated MCP browser context."
             ),
         ),
     ]
@@ -97,7 +95,6 @@ def plan_swarm(
     manifest_path: Path,
     *,
     runs_root: Path = Path("runs"),
-    driver_script: Path = _DEFAULT_DRIVER_SCRIPT,
     now: datetime | None = None,
 ) -> SwarmPlan:
     layout = RunArtifactLayout.for_agent(
@@ -106,23 +103,36 @@ def plan_swarm(
         now=now,
     )
     resolved_manifest = manifest_path.resolve()
-    resolved_driver = driver_script.resolve()
-    entries = tuple(
-        SwarmEntry(
+    directives = tuple(
+        CaseDirective(
             case_id=case.id,
             case_dir=layout.case_dir(case.id),
-            driver_invocation=DriverInvocation(
-                script=resolved_driver,
-                arguments=(
-                    str(resolved_manifest),
-                    "--case",
-                    case.id,
-                    "--submit",
-                    "--runs-root",
-                    str(layout.runs_root),
-                    "--run-id",
-                    layout.run_id,
-                ),
+            url=manifest.access.url,
+            case_input=case.input,
+            input_selector=manifest.interaction.input_selector,
+            preconditions=tuple(
+                manifest.interaction.preconditions
+            ),
+            response_wait_ms=manifest.interaction.response_wait_ms,
+            landing_screenshot_path=layout.screenshot_path(
+                case.id,
+                _LANDING_STEP_NUMBER,
+                LANDING_LABEL,
+            ),
+            landing_dom_snapshot_path=layout.dom_snapshot_path(
+                case.id,
+                _LANDING_STEP_NUMBER,
+                LANDING_LABEL,
+            ),
+            after_submit_screenshot_path=layout.screenshot_path(
+                case.id,
+                _POST_SUBMIT_STEP_NUMBER,
+                POST_SUBMIT_LABEL,
+            ),
+            after_submit_dom_snapshot_path=layout.dom_snapshot_path(
+                case.id,
+                _POST_SUBMIT_STEP_NUMBER,
+                POST_SUBMIT_LABEL,
             ),
         )
         for case in manifest.cases
@@ -132,7 +142,7 @@ def plan_swarm(
         agent_name=manifest.name,
         runs_root=layout.runs_root,
         manifest_path=resolved_manifest,
-        entries=entries,
+        directives=directives,
     )
 
 
