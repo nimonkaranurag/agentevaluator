@@ -7,6 +7,13 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from evaluate_agent.common.types import StrictFrozen
+from evaluate_agent.manifest.security import (
+    EnvVarName,
+    HostPolicy,
+    SafeText,
+    validate_host_against_policy,
+    validate_web_access_scheme,
+)
 from pydantic import (
     Field,
     HttpUrl,
@@ -35,11 +42,20 @@ Identifier = Annotated[
 
 class BearerAuth(StrictFrozen):
     type: Literal["bearer"] = "bearer"
+    # EnvVarName binds the field to the SHELL_VAR_NAME shape and
+    # rejects names whose contents are local-environment state
+    # (PATH, HOME, ...) rather than auth material — so a manifest
+    # cannot exfiltrate $PATH by aliasing it as a bearer token.
     token_env: Annotated[
-        str,
+        EnvVarName,
         Field(
-            min_length=1,
-            description="Environment variable holding the bearer token.",
+            description=(
+                "Environment variable holding the bearer "
+                "token. Must match ^[A-Z][A-Z0-9_]*$ and "
+                "must not name a forbidden variable "
+                "(PATH, HOME, USER, SHELL, PWD, LD_*, "
+                "DYLD_*, *_PRIVATE_KEY)."
+            ),
         ),
     ]
 
@@ -47,17 +63,23 @@ class BearerAuth(StrictFrozen):
 class BasicAuth(StrictFrozen):
     type: Literal["basic"] = "basic"
     username_env: Annotated[
-        str,
+        EnvVarName,
         Field(
-            min_length=1,
-            description="Environment variable holding the username.",
+            description=(
+                "Environment variable holding the basic-"
+                "auth username. Same allowlist as "
+                "BearerAuth.token_env."
+            ),
         ),
     ]
     password_env: Annotated[
-        str,
+        EnvVarName,
         Field(
-            min_length=1,
-            description="Environment variable holding the password.",
+            description=(
+                "Environment variable holding the basic-"
+                "auth password. Same allowlist as "
+                "BearerAuth.token_env."
+            ),
         ),
     ]
 
@@ -77,22 +99,106 @@ class WebAccess(StrictFrozen):
     ]
     auth: Auth | None = None
 
+    @model_validator(mode="after")
+    def _scheme_is_allowlisted(self) -> "WebAccess":
+        # Defense-in-depth on top of HttpUrl: re-checks the
+        # scheme so a future loosening of HttpUrl can't silently
+        # widen the attack surface to file:// / chrome:// /
+        # javascript: / data: navigations.
+        validate_web_access_scheme(
+            url=str(self.url),
+            field_label="access.url",
+        )
+        return self
+
 
 class LangfuseSource(StrictFrozen):
     host: HttpUrl
-    public_key_env: str = Field(
-        default="LANGFUSE_PUBLIC_KEY", min_length=1
+    # host_policy fails closed: the default 'https_only' rejects
+    # plaintext traffic to anything (including localhost), so a
+    # manifest that omits this field cannot accidentally regress
+    # into HTTP. Local-dev manifests must opt into the loopback
+    # policy explicitly.
+    host_policy: Annotated[
+        HostPolicy,
+        Field(
+            default="https_only",
+            description=(
+                "Allowed combination of scheme and host "
+                "for the LangFuse endpoint. 'https_only' "
+                "(default) requires https:// regardless "
+                "of host — production-safe. "
+                "'insecure_loopback_only' permits http:// "
+                "to a loopback host (localhost / "
+                "127.0.0.0/8 / ::1) for local development "
+                "against a self-hosted LangFuse; rejects "
+                "any non-loopback host."
+            ),
+        ),
+    ]
+    public_key_env: EnvVarName = Field(
+        default="LANGFUSE_PUBLIC_KEY",
+        description=(
+            "Environment variable holding the LangFuse "
+            "public key. Same allowlist as "
+            "BearerAuth.token_env."
+        ),
     )
-    secret_key_env: str = Field(
-        default="LANGFUSE_SECRET_KEY", min_length=1
+    secret_key_env: EnvVarName = Field(
+        default="LANGFUSE_SECRET_KEY",
+        description=(
+            "Environment variable holding the LangFuse "
+            "secret key. Same allowlist as "
+            "BearerAuth.token_env."
+        ),
     )
+
+    @model_validator(mode="after")
+    def _host_satisfies_policy(self) -> "LangfuseSource":
+        # Cross-field check: the policy is satisfied by the
+        # combination of scheme + host, so it can only run
+        # after both values are bound. field_label echoes the
+        # YAML path so the violation surfaces under
+        # 'observability.langfuse.host' in the load error.
+        validate_host_against_policy(
+            url=str(self.host),
+            policy=self.host_policy,
+            field_label="observability.langfuse.host",
+        )
+        return self
 
 
 class OtelSource(StrictFrozen):
     endpoint: HttpUrl
-    headers_env: str | None = Field(
-        default=None, min_length=1
+    host_policy: Annotated[
+        HostPolicy,
+        Field(
+            default="https_only",
+            description=(
+                "Allowed combination of scheme and host "
+                "for the OTEL collector endpoint. Same "
+                "semantics as LangfuseSource.host_policy."
+            ),
+        ),
+    ]
+    headers_env: EnvVarName | None = Field(
+        default=None,
+        description=(
+            "Optional environment variable holding the "
+            "OTEL collector headers (typically "
+            "OTEL_EXPORTER_OTLP_HEADERS shape). Same "
+            "allowlist as BearerAuth.token_env."
+        ),
     )
+
+    @model_validator(mode="after")
+    def _endpoint_satisfies_policy(self) -> "OtelSource":
+        validate_host_against_policy(
+            url=str(self.endpoint),
+            policy=self.host_policy,
+            field_label="observability.otel.endpoint",
+        )
+        return self
 
 
 UIExposedEvidence = Literal[
@@ -103,8 +209,12 @@ UIExposedEvidence = Literal[
 
 
 class UIIntrospectionSource(StrictFrozen):
+    # SafeText keeps free-form text out of the report's ANSI/
+    # control-char attack surface — a description that smuggled
+    # an ESC sequence would render as styled output in the
+    # Markdown report and could mislead a human reviewer.
     description: Annotated[
-        str,
+        SafeText,
         Field(
             min_length=1,
             description=(
@@ -170,8 +280,13 @@ class Observability(StrictFrozen):
 
 class Precondition(StrictFrozen):
     action: Literal["click", "select", "fill"]
+    # Selectors are technical strings rather than free prose,
+    # but legitimate CSS never contains C0 control bytes — so
+    # SafeText is a no-op for valid input and a clean rejection
+    # for adversarial input that tries to smuggle ANSI through
+    # the selector field into the rendered report.
     selector: Annotated[
-        str,
+        SafeText,
         Field(
             min_length=1,
             description=(
@@ -181,7 +296,7 @@ class Precondition(StrictFrozen):
         ),
     ]
     value: Annotated[
-        str | None,
+        SafeText | None,
         Field(
             default=None,
             min_length=1,
@@ -234,7 +349,7 @@ class InteractionConfig(StrictFrozen):
         ),
     ]
     input_selector: Annotated[
-        str | None,
+        SafeText | None,
         Field(
             default=None,
             min_length=1,
@@ -278,7 +393,11 @@ class Assertions(StrictFrozen):
     )
     must_route_to: Identifier | None = None
     max_steps: int | None = Field(default=None, ge=1)
-    final_response_contains: str | None = Field(
+    # SafeText on the substring guards the renderer: an attacker
+    # who controls the manifest can't inject ANSI/NUL bytes that
+    # would later be echoed verbatim into the Markdown report's
+    # 'expected' / 'observed' citation block.
+    final_response_contains: SafeText | None = Field(
         default=None, min_length=1
     )
     max_total_tokens: int | None = Field(
@@ -340,7 +459,12 @@ class Assertions(StrictFrozen):
 
 class Case(StrictFrozen):
     id: Slug
-    input: Annotated[str, Field(min_length=1)]
+    # case.input is what the driver types into the agent's chat
+    # box — control bytes here would be typed verbatim and could
+    # produce undefined behaviour in the agent's own input
+    # parser. SafeText also keeps the input safe to echo into
+    # the rendered report's case header.
+    input: Annotated[SafeText, Field(min_length=1)]
     assertions: Assertions = Field(
         default_factory=Assertions
     )
@@ -374,7 +498,11 @@ class Case(StrictFrozen):
 
 class AgentManifest(StrictFrozen):
     name: Slug
-    description: str | None = Field(
+    # The manifest description is rendered verbatim into the
+    # report's preface and into discovery-listing output, so
+    # SafeText is the same anti-ANSI guard that protects every
+    # other free-form field that flows to the renderer.
+    description: SafeText | None = Field(
         default=None, min_length=1, max_length=500
     )
     access: WebAccess
