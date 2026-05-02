@@ -126,7 +126,7 @@ A baseline whose `agent_name` does not match the current run is rejected with an
 <sub> UNDER CONSTRUCTION 🚧 · Powered by stubbornness and too much coffee ☕️</sub>
 
 <p align="center">
-  <img src="https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExbTV4eXVhNXB4amZnM2RtOHJheWFkc29qZXFjdzhpd2I4MzdxM2ZkZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/yofjV4wkaQ0Kig5xig/giphy.gif" width="480">
+  <img src="./assets/clawd.gif" width="480">
 </p>
 
 </div>
