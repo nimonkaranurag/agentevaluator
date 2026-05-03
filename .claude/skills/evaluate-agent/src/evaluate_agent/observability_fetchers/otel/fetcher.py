@@ -11,6 +11,7 @@ from typing import Any
 
 from evaluate_agent.manifest.schema import OtelSource
 from evaluate_agent.observability_fetchers.common import (
+    FetchContext,
     assemble_fetched_observability,
 )
 from evaluate_agent.observability_fetchers.fetcher import (
@@ -54,10 +55,12 @@ def fetch_otel_observability(
     spans = normalize_otel_resource_spans(resource_spans)
     return assemble_fetched_observability(
         spans,
-        case_dir=case_dir,
-        host=credentials.endpoint,
-        session_id=session_id,
-        trace_ids=trace_ids,
+        context=FetchContext(
+            case_dir=case_dir,
+            endpoint=credentials.endpoint,
+            session_id=session_id,
+            trace_ids=tuple(trace_ids),
+        ),
     )
 
 

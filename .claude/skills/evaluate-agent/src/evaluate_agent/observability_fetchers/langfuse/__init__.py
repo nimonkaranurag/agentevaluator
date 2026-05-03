@@ -7,11 +7,11 @@ from .credentials import (
     resolve_langfuse_credentials,
 )
 from .fetcher import fetch_langfuse_observability
-from .normalize import normalize_langfuse_observations
-from .observation_types import (
+from .normalize import (
     LANGFUSE_AGENT_TYPE,
     LANGFUSE_GENERATION_TYPE,
     LANGFUSE_TOOL_TYPE,
+    normalize_langfuse_observations,
 )
 
 __all__ = [

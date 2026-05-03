@@ -2,7 +2,7 @@
 Fetch upstream observability traces and persist them to the standard format.
 """
 
-from .common import NormalizedSpan, SpanKind
+from .common import FetchContext, NormalizedSpan, SpanKind
 from .fetcher import FetchedObservability
 from .langfuse import (
     LANGFUSE_AGENT_TYPE,
@@ -26,6 +26,7 @@ from .writer import (
 )
 
 __all__ = [
+    "FetchContext",
     "FetchedObservability",
     "LANGFUSE_AGENT_TYPE",
     "LANGFUSE_GENERATION_TYPE",

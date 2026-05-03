@@ -11,6 +11,7 @@ from .coerce import (
     non_negative_int_or_none,
     string_or_none,
 )
+from .fetch_context import FetchContext
 from .normalized_span import NormalizedSpan, SpanKind
 from .stats import (
     GenerationStats,
@@ -18,6 +19,7 @@ from .stats import (
 )
 
 __all__ = [
+    "FetchContext",
     "GenerationStats",
     "NormalizedSpan",
     "SpanKind",

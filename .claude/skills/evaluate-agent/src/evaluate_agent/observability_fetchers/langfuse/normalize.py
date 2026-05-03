@@ -18,11 +18,13 @@ from evaluate_agent.observability_fetchers.common import (
     string_or_none,
 )
 
-from .observation_types import (
-    LANGFUSE_AGENT_TYPE,
-    LANGFUSE_GENERATION_TYPE,
-    LANGFUSE_TOOL_TYPE,
-)
+# Discriminator values LangFuse stamps on its `Observation.type`
+# field. Used by _kind_from_type to route a raw observation to a
+# SpanKind. Tests import these to construct synthetic LangFuse
+# observations against the same vocabulary the fetcher consumes.
+LANGFUSE_TOOL_TYPE = "TOOL"
+LANGFUSE_AGENT_TYPE = "AGENT"
+LANGFUSE_GENERATION_TYPE = "GENERATION"
 
 
 def normalize_langfuse_observations(
@@ -132,4 +134,9 @@ def _generation_fields(
     }
 
 
-__all__ = ["normalize_langfuse_observations"]
+__all__ = [
+    "LANGFUSE_AGENT_TYPE",
+    "LANGFUSE_GENERATION_TYPE",
+    "LANGFUSE_TOOL_TYPE",
+    "normalize_langfuse_observations",
+]

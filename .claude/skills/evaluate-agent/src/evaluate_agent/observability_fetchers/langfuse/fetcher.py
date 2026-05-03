@@ -11,6 +11,7 @@ from typing import Any
 
 from evaluate_agent.manifest.schema import LangfuseSource
 from evaluate_agent.observability_fetchers.common import (
+    FetchContext,
     assemble_fetched_observability,
 )
 from evaluate_agent.observability_fetchers.fetcher import (
@@ -58,10 +59,12 @@ def fetch_langfuse_observability(
     spans = normalize_langfuse_observations(observations)
     return assemble_fetched_observability(
         spans,
-        case_dir=case_dir,
-        host=credentials.host,
-        session_id=session_id,
-        trace_ids=trace_ids,
+        context=FetchContext(
+            case_dir=case_dir,
+            endpoint=credentials.host,
+            session_id=session_id,
+            trace_ids=tuple(trace_ids),
+        ),
     )
 
 

@@ -4,8 +4,7 @@ Shared tail of every per-source fetcher: project spans, persist artifacts, summa
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from pathlib import Path
+from collections.abc import Iterable
 
 from evaluate_agent.observability_fetchers.fetcher import (
     FetchedObservability,
@@ -14,6 +13,7 @@ from evaluate_agent.observability_fetchers.writer import (
     write_observability_artifacts,
 )
 
+from .fetch_context import FetchContext
 from .normalized_span import NormalizedSpan
 from .stats import aggregate_generation_stats
 from .transforms import (
@@ -27,18 +27,14 @@ from .transforms import (
 def assemble_fetched_observability(
     spans: Iterable[NormalizedSpan],
     *,
-    case_dir: Path,
-    host: str,
-    session_id: str,
-    trace_ids: Sequence[str],
+    context: FetchContext,
 ) -> FetchedObservability:
-    # The shared tail of every per-source fetcher. Per-source
-    # code is responsible only for credentials, network I/O,
-    # and the source-specific normalize step. Once spans are in
-    # the canonical NormalizedSpan shape, the projections to
-    # ToolCall / RoutingDecision / StepCount / Generation, the
-    # write to disk, and the stats aggregation are identical
-    # across every backend.
+    # Per-source code is responsible only for credentials,
+    # network I/O, and the source-specific normalize step. Once
+    # spans are in the canonical NormalizedSpan shape, the
+    # projections to ToolCall / RoutingDecision / StepCount /
+    # Generation, the write to disk, and the stats aggregation
+    # are identical across every backend.
     spans_tuple = tuple(spans)
     tool_calls = tool_calls_from_normalized_spans(
         spans_tuple
@@ -54,7 +50,7 @@ def assemble_fetched_observability(
     )
 
     written = write_observability_artifacts(
-        case_dir=case_dir,
+        case_dir=context.case_dir,
         tool_calls=tool_calls,
         routing_decisions=routing_decisions,
         step_count=step_count,
@@ -63,9 +59,9 @@ def assemble_fetched_observability(
 
     stats = aggregate_generation_stats(generations)
     return FetchedObservability(
-        host=host,
-        session_id=session_id,
-        trace_ids=tuple(trace_ids),
+        endpoint=context.endpoint,
+        session_id=context.session_id,
+        trace_ids=context.trace_ids,
         observation_count=len(spans_tuple),
         tool_call_count=len(tool_calls),
         routing_decision_count=len(routing_decisions),

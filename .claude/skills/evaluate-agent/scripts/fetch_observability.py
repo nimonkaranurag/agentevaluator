@@ -245,7 +245,7 @@ def _print_success_block(
                 f"  case_id: {case_id}",
                 f"  case_dir: {case_dir}",
                 f"  source: {source_kind}",
-                f"  host: {result.host}",
+                f"  endpoint: {result.endpoint}",
                 f"  session_id: {result.session_id}",
                 f"  since: {_format_optional_timestamp(since)}",
                 f"  until: {_format_optional_timestamp(until)}",

@@ -11,7 +11,10 @@ from .writer import WrittenObservabilityArtifacts
 
 @dataclass(frozen=True)
 class FetchedObservability:
-    host: str
+    # Base URL of the backend the fetch executed against —
+    # `https://cloud.langfuse.com` for LangFuse, the Tempo-style
+    # query base (e.g. `https://tempo.example.com`) for OTEL.
+    endpoint: str
     session_id: str
     trace_ids: tuple[str, ...]
     observation_count: int
