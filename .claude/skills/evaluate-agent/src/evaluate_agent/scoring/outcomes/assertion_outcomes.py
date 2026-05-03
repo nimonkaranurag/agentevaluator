@@ -16,6 +16,9 @@ AssertionKind = Literal[
     "final_response_contains",
     "must_call",
     "must_not_call",
+    "must_call_exactly",
+    "must_call_with_args",
+    "must_call_in_order",
     "must_route_to",
     "max_steps",
     "max_total_tokens",
@@ -72,10 +75,14 @@ class AssertionPassed(StrictFrozen):
             description=(
                 "Specific subject of the assertion when "
                 "the assertion iterates per-target "
-                "(must_call / must_not_call: the tool "
-                "name; must_route_to: the agent name). "
-                "None for whole-case assertions "
-                "(final_response_contains, max_steps)."
+                "(must_call / must_not_call / "
+                "must_call_exactly / "
+                "must_call_with_args: the tool name; "
+                "must_route_to: the agent name). None "
+                "for whole-case assertions "
+                "(final_response_contains, max_steps, "
+                "must_call_in_order, max_total_*, "
+                "max_latency_ms)."
             ),
         ),
     ]

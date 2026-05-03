@@ -122,6 +122,24 @@ cases:
         - list_paid_leave_days
       must_not_call:
         - list_direct_reports
+      # Each lookup is keyed on a single alias; a redundant
+      # second lookup or a skipped one would change the answer.
+      must_call_exactly:
+        lookup_employee_record: 1
+        list_paid_leave_days: 1
+      # list_paid_leave_days consumes lookup_employee_record's
+      # output, so the order matters even if max_steps passes.
+      must_call_in_order:
+        - lookup_employee_record
+        - list_paid_leave_days
+      # The lookup must target the alias the user named — a
+      # call to lookup_employee_record(alias="other.user")
+      # would otherwise satisfy must_call without surfacing
+      # the bug.
+      must_call_with_args:
+        - tool_name: lookup_employee_record
+          args:
+            alias: alex.river
       max_steps: 4
       max_total_tokens: 4000
       max_total_cost_usd: 0.05

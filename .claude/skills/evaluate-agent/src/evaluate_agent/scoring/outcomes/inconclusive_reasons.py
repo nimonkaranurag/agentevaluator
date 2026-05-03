@@ -308,20 +308,24 @@ class GenerationCoverageIncomplete(StrictFrozen):
         Literal[
             "total_tokens",
             "total_cost_usd",
-            "latency_ms",
+            "interval",
         ],
         Field(
             description=(
-                "Per-generation field whose coverage is "
-                "incomplete. The assertion sums this field "
-                "across the case's generations and "
-                "compares against a declared cap; with "
-                "missing entries the sum would silently "
-                "undercount and a failing run could be "
-                "rendered as a passing one. Resolving to "
-                "inconclusive is the only honest answer "
-                "until the trace backend emits the field "
-                "for every generation."
+                "Per-generation evidence whose coverage "
+                "is incomplete. 'total_tokens' / "
+                "'total_cost_usd' name a single field the "
+                "assertion sums; 'interval' covers both "
+                "started_at AND ended_at, which together "
+                "anchor the generation on the case's "
+                "wall-clock timeline (max_latency_ms "
+                "consumes them as a single signal). With "
+                "missing entries a sum would silently "
+                "undercount, and a missing interval makes "
+                "wall-clock latency uncomputable; "
+                "resolving to inconclusive is the only "
+                "honest answer until the trace backend "
+                "emits the evidence for every generation."
             ),
         ),
     ]
@@ -366,21 +370,24 @@ class GenerationCoverageIncomplete(StrictFrozen):
             default=(
                 "To proceed:\n"
                 "  (1) Open the log at log_path and "
-                "identify the rows whose 'field' value is "
-                "null. The row's span_id locates the "
-                "underlying generation in the trace "
-                "backend.\n"
+                "identify the rows whose evidence is "
+                "missing — for total_tokens / "
+                "total_cost_usd, the rows whose named "
+                "field is null; for interval, the rows "
+                "whose started_at OR ended_at is null. "
+                "The row's span_id locates the underlying "
+                "generation in the trace backend.\n"
                 "  (2) Wire the trace backend to emit the "
-                "missing field for every generation. For "
-                "LangFuse: confirm cost_details mapping "
-                "is configured for the model "
+                "missing evidence for every generation. "
+                "For LangFuse: confirm cost_details "
+                "mapping is configured for the model "
                 "(self-hosted instances often skip cost "
                 "mapping); confirm usage is emitted (some "
                 "providers report usage only on the final "
                 "chunk of a stream); confirm start_time "
                 "and end_time are stamped on every "
-                "generation span (latency_ms is derived "
-                "from these).\n"
+                "generation span (max_latency_ms anchors "
+                "its wall-clock interval on these).\n"
                 "  (3) Re-run the case and re-score. "
                 "Partial coverage is intentionally "
                 "inconclusive rather than silently "

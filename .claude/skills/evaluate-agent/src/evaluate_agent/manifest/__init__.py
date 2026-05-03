@@ -26,6 +26,7 @@ from .loader import load_manifest
 from .schema import (
     AgentManifest,
     AgentManifestV1,
+    CallSpec,
     InteractionConfig,
     Precondition,
     UIExposedEvidence,
@@ -36,6 +37,7 @@ __all__ = [
     "AgentManifest",
     "AgentManifestV1",
     "CURRENT_API_VERSION",
+    "CallSpec",
     "DiscoveredManifest",
     "DiscoveryFailure",
     "DiscoveryOutcome",

@@ -12,6 +12,13 @@ from .max_total_cost_usd import (
 )
 from .max_total_tokens import evaluate_max_total_tokens
 from .must_call import evaluate_must_call
+from .must_call_exactly import evaluate_must_call_exactly
+from .must_call_in_order import (
+    evaluate_must_call_in_order,
+)
+from .must_call_with_args import (
+    evaluate_must_call_with_args,
+)
 from .must_not_call import evaluate_must_not_call
 from .must_route_to import evaluate_must_route_to
 
@@ -22,6 +29,9 @@ __all__ = [
     "evaluate_max_total_cost_usd",
     "evaluate_max_total_tokens",
     "evaluate_must_call",
+    "evaluate_must_call_exactly",
+    "evaluate_must_call_in_order",
+    "evaluate_must_call_with_args",
     "evaluate_must_not_call",
     "evaluate_must_route_to",
 ]
