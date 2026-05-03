@@ -1,18 +1,22 @@
 """
-Reduce NormalizedSpans of kind AGENT or TOOL into a canonical StepCount.
+Reduce AgentSpans and ToolSpans into a canonical StepCount.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime, timezone
 
 from evaluate_agent.observability_fetchers.common.normalized_span import (
+    AgentSpan,
     NormalizedSpan,
-    SpanKind,
+    ToolSpan,
 )
 from evaluate_agent.scoring.observability.schema import (
     StepCount,
 )
+
+_FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
 
 
 def step_count_from_normalized_spans(
@@ -29,13 +33,13 @@ def step_count_from_normalized_spans(
     agent_span_ids = {
         span.span_id
         for span in spans_tuple
-        if span.kind is SpanKind.AGENT
+        if isinstance(span, AgentSpan)
     }
     candidates = sorted(
         (
             span
             for span in spans_tuple
-            if span.kind in (SpanKind.AGENT, SpanKind.TOOL)
+            if isinstance(span, (AgentSpan, ToolSpan))
             and (
                 span.parent_span_id is None
                 or span.parent_span_id in agent_span_ids
@@ -52,13 +56,27 @@ def step_count_from_normalized_spans(
 
 def _start_time_sort_key(
     span: NormalizedSpan,
-) -> tuple[int, str]:
-    # Spans without a start_time sink to the end so the visible
-    # ordering tracks the operator's mental timeline. They keep
-    # a stable secondary key by virtue of Python's stable sort.
-    if span.start_time:
-        return (0, span.start_time)
-    return (1, "")
+) -> tuple[int, datetime]:
+    # Parse to datetime instead of comparing ISO strings:
+    # lexicographic sort of ISO-8601 only happens to work when
+    # every timestamp uses the same fractional-seconds format
+    # and the same TZ representation, which is not guaranteed
+    # across LangFuse / OTEL emitters or even within a single
+    # mixed-version backend. Spans without a parseable start
+    # sink to the end via the (1, _FAR_FUTURE) bucket so the
+    # sort remains total.
+    if not span.start_time:
+        return (1, _FAR_FUTURE)
+    try:
+        parsed = datetime.fromisoformat(span.start_time)
+    except ValueError:
+        return (1, _FAR_FUTURE)
+    if parsed.tzinfo is None:
+        # Naive timestamps from a backend that doesn't stamp TZ
+        # are interpreted as UTC, matching how our normalizers
+        # serialise OTEL unix-nano values.
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (0, parsed)
 
 
 __all__ = ["step_count_from_normalized_spans"]

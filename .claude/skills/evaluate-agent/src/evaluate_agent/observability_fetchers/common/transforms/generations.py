@@ -1,5 +1,5 @@
 """
-Project NormalizedSpans of kind GENERATION onto canonical Generation records.
+Project GenerationSpans onto canonical Generation records.
 """
 
 from __future__ import annotations
@@ -7,8 +7,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from evaluate_agent.observability_fetchers.common.normalized_span import (
+    GenerationSpan,
     NormalizedSpan,
-    SpanKind,
 )
 from evaluate_agent.scoring.observability.schema import (
     Generation,
@@ -32,7 +32,7 @@ def generations_from_normalized_spans(
             ended_at=span.end_time,
         )
         for span in spans
-        if span.kind is SpanKind.GENERATION
+        if isinstance(span, GenerationSpan)
     )
 
 

@@ -1,23 +1,15 @@
 """
-Source-agnostic span shape that every per-source normalizer emits.
+Discriminated union of normalized spans, one variant per kind the canonical schema cares about.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any
-
-
-class SpanKind(str, Enum):
-    AGENT = "AGENT"
-    TOOL = "TOOL"
-    GENERATION = "GENERATION"
-    OTHER = "OTHER"
+from typing import Any, TypeAlias
 
 
 @dataclass(frozen=True)
-class NormalizedSpan:
+class _SpanCommon:
     # The span's stable identifier within its source backend.
     # Cited verbatim by the scoring layer's pass / fail evidence,
     # so the source must produce a value that survives a round
@@ -25,18 +17,23 @@ class NormalizedSpan:
     span_id: str
     parent_span_id: str | None
     name: str | None
-    kind: SpanKind
     start_time: str | None
     end_time: str | None
-    # TOOL-only payload. Populated only when kind == TOOL; left
-    # None on every other kind so the canonical transform layer
-    # can route on field presence without re-checking kind.
+
+
+@dataclass(frozen=True)
+class ToolSpan(_SpanCommon):
     input: dict[str, Any] | None = None
     output: str | None = None
-    # AGENT-only payload — captured rationale for the routing
-    # decision, when the source surfaces one.
+
+
+@dataclass(frozen=True)
+class AgentSpan(_SpanCommon):
     routing_reason: str | None = None
-    # GENERATION-only payload — usage and cost telemetry.
+
+
+@dataclass(frozen=True)
+class GenerationSpan(_SpanCommon):
     model: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -46,4 +43,27 @@ class NormalizedSpan:
     total_cost_usd: float | None = None
 
 
-__all__ = ["NormalizedSpan", "SpanKind"]
+@dataclass(frozen=True)
+class OtherSpan(_SpanCommon):
+    pass
+
+
+# A normalized span is exactly one of the four variants. Encoding
+# kind as the dataclass type (rather than a SpanKind enum field)
+# means impossible states are unrepresentable: a TOOL span cannot
+# carry a model, a GENERATION cannot carry tool arguments, the
+# transform layer can dispatch via isinstance(), and the type
+# checker validates each construction site against the right field
+# set.
+NormalizedSpan: TypeAlias = (
+    ToolSpan | AgentSpan | GenerationSpan | OtherSpan
+)
+
+
+__all__ = [
+    "AgentSpan",
+    "GenerationSpan",
+    "NormalizedSpan",
+    "OtherSpan",
+    "ToolSpan",
+]

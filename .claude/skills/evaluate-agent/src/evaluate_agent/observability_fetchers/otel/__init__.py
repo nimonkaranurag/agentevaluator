@@ -25,7 +25,6 @@ from .semantic_conventions import (
     OPERATION_CREATE_AGENT,
     OPERATION_EXECUTE_TOOL,
     OPERATION_INVOKE_AGENT,
-    classify_otel_span,
 )
 
 __all__ = [
@@ -46,7 +45,6 @@ __all__ = [
     "OPERATION_EXECUTE_TOOL",
     "OPERATION_INVOKE_AGENT",
     "OtelCredentials",
-    "classify_otel_span",
     "fetch_otel_observability",
     "normalize_otel_resource_spans",
     "resolve_otel_credentials",

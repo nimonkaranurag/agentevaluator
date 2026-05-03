@@ -63,8 +63,8 @@ def fetch_langfuse_observability(
             case_dir=case_dir,
             endpoint=credentials.host,
             session_id=session_id,
-            trace_ids=tuple(trace_ids),
         ),
+        trace_ids=trace_ids,
     )
 
 

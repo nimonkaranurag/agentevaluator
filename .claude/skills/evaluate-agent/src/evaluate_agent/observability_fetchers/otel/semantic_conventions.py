@@ -1,20 +1,11 @@
 """
-OpenTelemetry GenAI semantic-convention attribute keys and the span-kind classifier.
+OpenTelemetry GenAI semantic-convention attribute keys consumed by the OTEL normalizer.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
-from evaluate_agent.observability_fetchers.common import (
-    SpanKind,
-)
-
-# Attribute keys defined in the OpenTelemetry GenAI semantic
-# conventions. Constants live here so the OTLP shape contract
-# is centralised; the normalize step references them by name
-# and the classifier below routes spans on their presence.
+# Attribute keys defined by the upstream GenAI semantic
+# conventions.
 ATTR_OPERATION_NAME = "gen_ai.operation.name"
 ATTR_REQUEST_MODEL = "gen_ai.request.model"
 ATTR_USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens"
@@ -41,38 +32,11 @@ OPERATION_EXECUTE_TOOL = "execute_tool"
 OPERATION_INVOKE_AGENT = "invoke_agent"
 OPERATION_CREATE_AGENT = "create_agent"
 GENERATION_OPERATIONS = frozenset(
-    {
-        "chat",
-        "text_completion",
-        "embeddings",
-    }
+    {"chat", "text_completion", "embeddings"}
 )
 AGENT_OPERATIONS = frozenset(
     {OPERATION_INVOKE_AGENT, OPERATION_CREATE_AGENT}
 )
-
-
-def classify_otel_span(
-    attributes: Mapping[str, Any],
-) -> SpanKind:
-    operation = attributes.get(ATTR_OPERATION_NAME)
-    if (
-        operation == OPERATION_EXECUTE_TOOL
-        or ATTR_TOOL_NAME in attributes
-    ):
-        return SpanKind.TOOL
-    if (
-        operation in AGENT_OPERATIONS
-        or ATTR_AGENT_NAME in attributes
-    ):
-        return SpanKind.AGENT
-    if (
-        operation in GENERATION_OPERATIONS
-        or ATTR_USAGE_INPUT_TOKENS in attributes
-        or ATTR_USAGE_OUTPUT_TOKENS in attributes
-    ):
-        return SpanKind.GENERATION
-    return SpanKind.OTHER
 
 
 __all__ = [
@@ -94,5 +58,4 @@ __all__ = [
     "OPERATION_CREATE_AGENT",
     "OPERATION_EXECUTE_TOOL",
     "OPERATION_INVOKE_AGENT",
-    "classify_otel_span",
 ]

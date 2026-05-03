@@ -1,5 +1,5 @@
 """
-Project NormalizedSpans of kind AGENT onto canonical RoutingDecision records.
+Project AgentSpans onto canonical RoutingDecision records.
 """
 
 from __future__ import annotations
@@ -7,8 +7,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from evaluate_agent.observability_fetchers.common.normalized_span import (
+    AgentSpan,
     NormalizedSpan,
-    SpanKind,
 )
 from evaluate_agent.scoring.observability.schema import (
     RoutingDecision,
@@ -22,7 +22,7 @@ def routing_decisions_from_normalized_spans(
     parent_agent_name_by_id = {
         span.span_id: span.name
         for span in spans_tuple
-        if span.kind is SpanKind.AGENT
+        if isinstance(span, AgentSpan)
     }
     return tuple(
         RoutingDecision(
@@ -35,7 +35,7 @@ def routing_decisions_from_normalized_spans(
             timestamp=span.start_time,
         )
         for span in spans_tuple
-        if span.kind is SpanKind.AGENT and span.name
+        if isinstance(span, AgentSpan) and span.name
     )
 
 

@@ -12,17 +12,26 @@ from .coerce import (
     string_or_none,
 )
 from .fetch_context import FetchContext
-from .normalized_span import NormalizedSpan, SpanKind
+from .normalized_span import (
+    AgentSpan,
+    GenerationSpan,
+    NormalizedSpan,
+    OtherSpan,
+    ToolSpan,
+)
 from .stats import (
     GenerationStats,
     aggregate_generation_stats,
 )
 
 __all__ = [
+    "AgentSpan",
     "FetchContext",
+    "GenerationSpan",
     "GenerationStats",
     "NormalizedSpan",
-    "SpanKind",
+    "OtherSpan",
+    "ToolSpan",
     "aggregate_generation_stats",
     "assemble_fetched_observability",
     "dict_or_none",

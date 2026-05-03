@@ -2,7 +2,14 @@
 Fetch upstream observability traces and persist them to the standard format.
 """
 
-from .common import FetchContext, NormalizedSpan, SpanKind
+from .common import (
+    AgentSpan,
+    FetchContext,
+    GenerationSpan,
+    NormalizedSpan,
+    OtherSpan,
+    ToolSpan,
+)
 from .fetcher import FetchedObservability
 from .langfuse import (
     LANGFUSE_AGENT_TYPE,
@@ -26,15 +33,18 @@ from .writer import (
 )
 
 __all__ = [
+    "AgentSpan",
     "FetchContext",
     "FetchedObservability",
+    "GenerationSpan",
     "LANGFUSE_AGENT_TYPE",
     "LANGFUSE_GENERATION_TYPE",
     "LANGFUSE_TOOL_TYPE",
     "LangfuseCredentials",
     "NormalizedSpan",
     "OtelCredentials",
-    "SpanKind",
+    "OtherSpan",
+    "ToolSpan",
     "WrittenObservabilityArtifacts",
     "fetch_langfuse_observability",
     "fetch_otel_observability",

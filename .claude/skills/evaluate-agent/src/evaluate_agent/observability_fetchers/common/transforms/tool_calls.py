@@ -1,5 +1,5 @@
 """
-Project NormalizedSpans of kind TOOL onto canonical ToolCall records.
+Project ToolSpans onto canonical ToolCall records.
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from collections.abc import Iterable
 
 from evaluate_agent.observability_fetchers.common.normalized_span import (
     NormalizedSpan,
-    SpanKind,
+    ToolSpan,
 )
 from evaluate_agent.scoring.observability.schema import (
     ToolCall,
@@ -27,7 +27,7 @@ def tool_calls_from_normalized_spans(
             timestamp=span.start_time,
         )
         for span in spans
-        if span.kind is SpanKind.TOOL and span.name
+        if isinstance(span, ToolSpan) and span.name
     )
 
 

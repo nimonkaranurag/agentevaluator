@@ -4,7 +4,7 @@ Shared tail of every per-source fetcher: project spans, persist artifacts, summa
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from evaluate_agent.observability_fetchers.fetcher import (
     FetchedObservability,
@@ -28,6 +28,7 @@ def assemble_fetched_observability(
     spans: Iterable[NormalizedSpan],
     *,
     context: FetchContext,
+    trace_ids: Sequence[str],
 ) -> FetchedObservability:
     # Per-source code is responsible only for credentials,
     # network I/O, and the source-specific normalize step. Once
@@ -61,7 +62,7 @@ def assemble_fetched_observability(
     return FetchedObservability(
         endpoint=context.endpoint,
         session_id=context.session_id,
-        trace_ids=context.trace_ids,
+        trace_ids=tuple(trace_ids),
         observation_count=len(spans_tuple),
         tool_call_count=len(tool_calls),
         routing_decision_count=len(routing_decisions),
