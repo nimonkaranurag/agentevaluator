@@ -138,7 +138,6 @@ A baseline whose `agent_name` does not match the current run is rejected with an
 | | Feature | What it brings |
 | :---: | :--- | :--- |
 | 🔧 | Citation grounding | Narrative claims must cite an artifact whose contents actually contain the claimed evidence — not just a path that exists on disk. |
-| 🔧 | Scoring semantics | `max_steps` counts reasoning steps (not raw generations), `max_latency_ms` uses wall-clock spans (not summed generation time), and three new assertion kinds — `must_call_exactly`, `must_call_with_args`, `must_call_in_order` — close the false-pass holes in `must_call`. |
 | 🔧 | Reply-region scoping | `final_response_contains` matches only inside the agent's most recent reply via an explicit `interaction.reply_selector`, not anywhere in the captured DOM. |
 | 🔧 | Real orchestrator | Swarm dispatch moves from prose-in-SKILL.md into `evaluate_agent.dispatch` — slot pinning, retries, idempotent re-runs, and per-host concurrency caps in code. |
 | 🔧 | Flake detection | `--repeat N` drives every case N times into sibling runs and `--aggregate-runs` flags assertions whose pass rate falls below a stability threshold. |
