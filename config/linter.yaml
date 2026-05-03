@@ -1,0 +1,25 @@
+# CI policy for the linting stage.
+#
+# Read by .github/scripts/run_linters.py — adding a linter or a target
+# is a one-file change here, not a pipeline edit. Tool-specific knobs
+# (black line-length, isort profile) live in pyproject.toml so the
+# editor and CI converge on the same configuration with no duplication.
+#
+# Each entry under `linters` declares the check command. The runner
+# invokes the command as `<command> <target>` for every target listed
+# below and aggregates the exit codes — any non-zero exit fails the
+# stage and the workflow surfaces every offender in one report.
+
+linters:
+  - name: black
+    description: Format check — fails on any whitespace or quote drift.
+    check_command: [uv, run, black, --check]
+  - name: isort
+    description: Import-order check — fails on any reordering needed.
+    check_command: [uv, run, isort, --check-only, --diff]
+
+targets:
+  - .claude/skills/evaluate-agent/src
+  - .claude/skills/evaluate-agent/scripts
+  - .claude/skills/evaluate-agent/tests
+  - .github/scripts

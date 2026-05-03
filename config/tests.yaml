@@ -1,0 +1,37 @@
+# CI policy for the test stage.
+#
+# Read by .github/scripts/run_tests.py — declares which packages are
+# in scope for coverage measurement and the minimum coverage that
+# must hold for the build to pass. Pytest's own knobs (testpaths,
+# asyncio_mode, pythonpath) live in pyproject.toml's
+# [tool.pytest.ini_options] so pytest's discovery and the CI gate
+# read the same source of truth.
+#
+# `coverage.fail_under` is the merge gate: a build that drops below
+# this threshold fails the required check, blocking merges to main.
+# Adjust deliberately — lowering it normalizes regressions; raising
+# it should be paired with the tests that justify the new floor.
+
+coverage:
+  source:
+    - .claude/skills/evaluate-agent/src/evaluate_agent
+  fail_under: 90.0
+  # Pure-glue modules that have no behavior to assert: package
+  # __init__.py files re-export public names and contribute zero
+  # branches. Including them inflates the denominator with lines
+  # that no test could meaningfully cover, so we omit them
+  # explicitly rather than padding tests with import-only cases.
+  omit:
+    - "*/__init__.py"
+    # langfuse_fetcher.py is the LangFuse SDK integration —
+    # exercising its real code paths requires a running
+    # LangFuse instance. The "no flunky mocks" rule (saved
+    # feedback) rules out a mock-only test suite that would
+    # cover lines without exercising real SDK behavior.
+    - "*/observability_fetcher/langfuse_fetcher.py"
+    # Driver modules talk to a Playwright browser through MCP —
+    # same constraint: real-browser-only, no flunky mocks.
+    - "*/driver/*"
+  reports:
+    - term-missing
+    - xml

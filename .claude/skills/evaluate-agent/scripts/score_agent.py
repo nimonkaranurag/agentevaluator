@@ -51,6 +51,9 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _SRC_DIR = _SCRIPT_DIR.parent / "src"
 sys.path.insert(0, str(_SRC_DIR))
 
+from evaluate_agent.common.errors.manifest import (  # noqa: E402
+    ManifestError,
+)
 from evaluate_agent.common.errors.scoring import (  # noqa: E402
     BaselineAgentMismatchError,
 )
@@ -63,7 +66,6 @@ from evaluate_agent.common.script_logging import (  # noqa: E402
 )
 from evaluate_agent.manifest import (  # noqa: E402
     AgentManifest,
-    ManifestError,
     load_manifest,
 )
 from evaluate_agent.manifest.schema import (  # noqa: E402

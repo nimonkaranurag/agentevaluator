@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Both jobs are required checks for merge to main. Configure branch
+# protection on main to require `lint` and `tests` (the job names
+# below) before allowing a PR to merge. CI policy lives in config/
+# linter.yaml and config/tests.yaml; pipeline edits should be rare.
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dev dependencies
+        run: uv sync --group dev
+
+      - name: Run linters
+        run: uv run python .github/scripts/run_linters.py
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dev dependencies
+        run: uv sync --group dev
+
+      - name: Run pytest with coverage gate
+        run: uv run python .github/scripts/run_tests.py
+
+      - name: Upload coverage XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore

@@ -4,15 +4,18 @@ Typed errors raised by the report renderer.
 
 from __future__ import annotations
 
-from evaluate_agent.report.common.citation_validator import (
-    CitationValidationFailure,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from evaluate_agent.report.common.citation_validator import (
+        CitationValidationFailure,
+    )
 
 
 class UnresolvedCitationError(Exception):
     def __init__(
         self,
-        failures: tuple[CitationValidationFailure, ...],
+        failures: "tuple[CitationValidationFailure, ...]",
     ) -> None:
         if not failures:
             raise ValueError(
@@ -26,7 +29,7 @@ class UnresolvedCitationError(Exception):
 
     @staticmethod
     def _format(
-        failures: tuple[CitationValidationFailure, ...],
+        failures: "tuple[CitationValidationFailure, ...]",
     ) -> str:
         lines = [
             f"{len(failures)} citation(s) inside the "

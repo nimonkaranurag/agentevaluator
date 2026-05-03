@@ -14,6 +14,8 @@ from pydantic import Field, model_validator
 TargetedAssertionKind = Literal[
     "must_call",
     "must_not_call",
+    "must_call_exactly",
+    "must_call_with_args",
     "must_route_to",
 ]
 
@@ -21,13 +23,25 @@ ASSERTION_KIND_SCHEMA_ORDER: tuple[AssertionKind, ...] = (
     "final_response_contains",
     "must_call",
     "must_not_call",
+    "must_call_exactly",
+    "must_call_with_args",
+    "must_call_in_order",
     "must_route_to",
     "max_steps",
+    "max_total_tokens",
+    "max_total_cost_usd",
+    "max_latency_ms",
 )
 
 TARGETED_ASSERTION_KINDS: frozenset[AssertionKind] = (
     frozenset(
-        ("must_call", "must_not_call", "must_route_to")
+        (
+            "must_call",
+            "must_not_call",
+            "must_call_exactly",
+            "must_call_with_args",
+            "must_route_to",
+        )
     )
 )
 

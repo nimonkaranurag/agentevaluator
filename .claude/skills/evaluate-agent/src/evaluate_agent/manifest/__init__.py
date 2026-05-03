@@ -1,16 +1,6 @@
 """
-Agent manifest: schema, loader, discovery, and typed errors.
+Agent manifest: schema, loader, discovery.
 """
-
-from evaluate_agent.common.errors.manifest import (
-    ManifestDiscoveryRootError,
-    ManifestError,
-    ManifestMissingApiVersionError,
-    ManifestNotFoundError,
-    ManifestSyntaxError,
-    ManifestUnsupportedApiVersionError,
-    ManifestValidationError,
-)
 
 from .api_version import (
     CURRENT_API_VERSION,
@@ -42,13 +32,6 @@ __all__ = [
     "DiscoveryFailure",
     "DiscoveryOutcome",
     "InteractionConfig",
-    "ManifestDiscoveryRootError",
-    "ManifestError",
-    "ManifestMissingApiVersionError",
-    "ManifestNotFoundError",
-    "ManifestSyntaxError",
-    "ManifestUnsupportedApiVersionError",
-    "ManifestValidationError",
     "Precondition",
     "SUPPORTED_API_VERSIONS",
     "UIExposedEvidence",
