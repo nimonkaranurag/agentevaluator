@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from evaluate_agent.manifest.api_version import (
+from evaluate_agent.common.manifest_constants import (
     API_VERSION_KEY,
     CURRENT_API_VERSION,
     SUPPORTED_API_VERSIONS,

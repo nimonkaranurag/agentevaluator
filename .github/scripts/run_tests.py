@@ -1,0 +1,192 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["pyyaml>=6"]
+# ///
+"""
+Run pytest with coverage against the packages declared in config/tests.yaml and fail the build when measured coverage drops below the policy's coverage.fail_under threshold.
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+@dataclass(frozen=True)
+class _CoveragePolicy:
+    sources: tuple[Path, ...]
+    fail_under: float
+    omit: tuple[str, ...]
+    reports: tuple[str, ...]
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="run_tests",
+        description=(
+            "Execute pytest with coverage measurement "
+            "and enforce the policy's coverage floor."
+        ),
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/tests.yaml"),
+        help=(
+            "Path to the test policy YAML "
+            "(default: config/tests.yaml)."
+        ),
+    )
+    parser.add_argument(
+        "--extra",
+        action="append",
+        default=[],
+        help=(
+            "Extra argument forwarded verbatim to "
+            "pytest. Repeat to forward multiple "
+            "arguments."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def _load_policy(config_path: Path) -> _CoveragePolicy:
+    if not config_path.is_file():
+        raise FileNotFoundError(
+            f"test config not found at {config_path}; "
+            f"either pass --config or create the file."
+        )
+    raw: Any = yaml.safe_load(
+        config_path.read_text(encoding="utf-8")
+    )
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{config_path}: expected a YAML mapping at "
+            f"the top level."
+        )
+    coverage_raw = raw.get("coverage")
+    if not isinstance(coverage_raw, dict):
+        raise ValueError(
+            f"{config_path}: 'coverage' must be a "
+            f"mapping."
+        )
+    source_raw = coverage_raw.get("source")
+    if not isinstance(source_raw, list) or not source_raw:
+        raise ValueError(
+            f"{config_path}: coverage.source must be a "
+            f"non-empty list of paths."
+        )
+    sources: list[Path] = []
+    for index, entry in enumerate(source_raw):
+        if not isinstance(entry, str) or not entry:
+            raise ValueError(
+                f"{config_path}: coverage.source"
+                f"[{index}] must be a non-empty string."
+            )
+        path = Path(entry)
+        if not path.is_dir():
+            raise ValueError(
+                f"{config_path}: coverage.source"
+                f"[{index}]={entry!r} is not a directory "
+                f"on disk; either remove the entry or "
+                f"create the path."
+            )
+        sources.append(path)
+    fail_under_raw = coverage_raw.get("fail_under")
+    if not isinstance(fail_under_raw, (int, float)) or not (
+        0 <= float(fail_under_raw) <= 100
+    ):
+        raise ValueError(
+            f"{config_path}: coverage.fail_under must be "
+            f"a number between 0 and 100 (got "
+            f"{fail_under_raw!r})."
+        )
+    omit_raw = coverage_raw.get("omit", [])
+    if not isinstance(omit_raw, list) or not all(
+        isinstance(item, str) and item for item in omit_raw
+    ):
+        raise ValueError(
+            f"{config_path}: coverage.omit must be a "
+            f"list of non-empty strings."
+        )
+    reports_raw = coverage_raw.get(
+        "reports", ["term-missing"]
+    )
+    if not isinstance(reports_raw, list) or not all(
+        isinstance(item, str) and item
+        for item in reports_raw
+    ):
+        raise ValueError(
+            f"{config_path}: coverage.reports must be a "
+            f"list of non-empty strings."
+        )
+    return _CoveragePolicy(
+        sources=tuple(sources),
+        fail_under=float(fail_under_raw),
+        omit=tuple(omit_raw),
+        reports=tuple(reports_raw),
+    )
+
+
+def _build_pytest_command(
+    policy: _CoveragePolicy, extras: list[str]
+) -> list[str]:
+    command: list[str] = ["uv", "run", "pytest"]
+    for source in policy.sources:
+        command.append(f"--cov={source}")
+    for report in policy.reports:
+        command.append(f"--cov-report={report}")
+    command.append(f"--cov-fail-under={policy.fail_under}")
+    command.extend(extras)
+    return command
+
+
+def _write_coveragerc(policy: _CoveragePolicy) -> Path:
+    # The coverage tool reads omit globs from a config file; a
+    # CLI flag for omit does not exist. Generated on every run
+    # so the YAML stays the source of truth — editing
+    # .coveragerc by hand would silently shadow the policy.
+    rc_path = Path(".coveragerc")
+    lines = [
+        "# Auto-generated by .github/scripts/run_tests.py from",
+        "# config/tests.yaml. Do not edit by hand — your changes",
+        "# will be overwritten on the next CI run.",
+        "[run]",
+        "branch = True",
+    ]
+    if policy.omit:
+        lines.append("omit =")
+        for pattern in policy.omit:
+            lines.append(f"    {pattern}")
+    rc_path.write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+    return rc_path
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(
+        sys.argv[1:] if argv is None else argv
+    )
+    try:
+        policy = _load_policy(args.config)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"::error::{exc}", file=sys.stderr)
+        return 2
+
+    _write_coveragerc(policy)
+    command = _build_pytest_command(policy, args.extra)
+    print(f"$ {' '.join(command)}", flush=True)
+    completed = subprocess.run(command, check=False)
+    return completed.returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main())
