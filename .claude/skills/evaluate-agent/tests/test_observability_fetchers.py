@@ -1,5 +1,5 @@
 """
-Failure-mode tests for the observability_fetchers package: credentials, writer, and LangFuse transforms.
+Failure-mode tests for the observability_fetchers package: credentials, writer, normalizers, shared transforms.
 """
 
 from __future__ import annotations
@@ -11,31 +11,55 @@ from pathlib import Path
 import pytest
 from evaluate_agent.common.errors.observability_fetchers import (
     LangfuseCredentialEnvVarMissing,
+    OtelHeadersEnvMissing,
+    OtelHeadersMalformed,
 )
-from evaluate_agent.manifest.schema import LangfuseSource
+from evaluate_agent.manifest.schema import (
+    LangfuseSource,
+    OtelSource,
+)
 from evaluate_agent.observability_fetchers import (
     LANGFUSE_AGENT_TYPE,
     LANGFUSE_GENERATION_TYPE,
     LANGFUSE_TOOL_TYPE,
+    NormalizedSpan,
+    SpanKind,
+    normalize_langfuse_observations,
+    normalize_otel_resource_spans,
     observability_log_dir_for,
     resolve_langfuse_credentials,
-    transform_observations_to_generations,
-    transform_observations_to_routing_decisions,
-    transform_observations_to_step_count,
-    transform_observations_to_tool_calls,
+    resolve_otel_credentials,
     write_observability_artifacts,
 )
+from evaluate_agent.observability_fetchers.common.transforms import (
+    generations_from_normalized_spans,
+    routing_decisions_from_normalized_spans,
+    step_count_from_normalized_spans,
+    tool_calls_from_normalized_spans,
+)
+from evaluate_agent.observability_fetchers.otel import (
+    ATTR_AGENT_NAME,
+    ATTR_OPERATION_NAME,
+    ATTR_REQUEST_MODEL,
+    ATTR_TOOL_NAME,
+    ATTR_TOOL_PARAMETERS,
+    ATTR_USAGE_INPUT_COST_USD,
+    ATTR_USAGE_INPUT_TOKENS,
+    ATTR_USAGE_OUTPUT_COST_USD,
+    ATTR_USAGE_OUTPUT_TOKENS,
+    OPERATION_EXECUTE_TOOL,
+    OPERATION_INVOKE_AGENT,
+    classify_otel_span,
+)
 from evaluate_agent.scoring.observability.schema import (
-    Generation,
-    RoutingDecision,
     StepCount,
     ToolCall,
 )
 
-# ---------- credentials ----------
+# ---------- LangFuse credentials ----------
 
 
-def _source(
+def _langfuse_source(
     host: str = "https://cloud.langfuse.com",
 ) -> LangfuseSource:
     return LangfuseSource.model_validate(
@@ -56,7 +80,7 @@ def test_resolve_credentials_strips_trailing_slash(
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
     creds = resolve_langfuse_credentials(
-        _source("https://host.example.com/")
+        _langfuse_source("https://host.example.com/")
     )
     assert creds.host == "https://host.example.com"
 
@@ -69,7 +93,7 @@ def test_resolve_credentials_raises_when_public_key_missing(
     with pytest.raises(
         LangfuseCredentialEnvVarMissing
     ) as info:
-        resolve_langfuse_credentials(_source())
+        resolve_langfuse_credentials(_langfuse_source())
     assert info.value.env_var == "LANGFUSE_PUBLIC_KEY"
     assert info.value.role == "public key"
 
@@ -83,7 +107,88 @@ def test_resolve_credentials_raises_when_value_blank(
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
     with pytest.raises(LangfuseCredentialEnvVarMissing):
-        resolve_langfuse_credentials(_source())
+        resolve_langfuse_credentials(_langfuse_source())
+
+
+# ---------- OTEL credentials ----------
+
+
+def _otel_source(
+    *,
+    endpoint: str = "https://otel.example.com",
+    headers_env: str | None = None,
+) -> OtelSource:
+    payload: dict[str, object] = {"endpoint": endpoint}
+    if headers_env is not None:
+        payload["headers_env"] = headers_env
+    return OtelSource.model_validate(payload)
+
+
+def test_resolve_otel_credentials_strips_trailing_slash() -> (
+    None
+):
+    creds = resolve_otel_credentials(
+        _otel_source(endpoint="https://otel.example.com/")
+    )
+    assert creds.endpoint == "https://otel.example.com"
+    assert creds.headers == {}
+
+
+def test_resolve_otel_credentials_parses_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        "Authorization=Bearer abc,X-Tenant=acme",
+    )
+    creds = resolve_otel_credentials(
+        _otel_source(
+            headers_env="OTEL_EXPORTER_OTLP_HEADERS"
+        )
+    )
+    assert creds.headers == {
+        "Authorization": "Bearer abc",
+        "X-Tenant": "acme",
+    }
+
+
+def test_resolve_otel_credentials_raises_when_env_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(
+        "OTEL_EXPORTER_OTLP_HEADERS", raising=False
+    )
+    with pytest.raises(OtelHeadersEnvMissing) as info:
+        resolve_otel_credentials(
+            _otel_source(
+                headers_env="OTEL_EXPORTER_OTLP_HEADERS"
+            )
+        )
+    assert info.value.env_var == "OTEL_EXPORTER_OTLP_HEADERS"
+
+
+def test_resolve_otel_credentials_rejects_pair_without_equals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A header pair lacking the `=` separator is
+    # indistinguishable from a value-less key and would
+    # silently produce an empty header. Reject explicitly so
+    # the OTLP backend doesn't see a malformed Authorization
+    # header at query time.
+    monkeypatch.setenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        "Authorization Bearer abc",
+    )
+    with pytest.raises(OtelHeadersMalformed) as info:
+        resolve_otel_credentials(
+            _otel_source(
+                headers_env="OTEL_EXPORTER_OTLP_HEADERS"
+            )
+        )
+    assert (
+        info.value.offending_pair
+        == "Authorization Bearer abc"
+    )
 
 
 # ---------- writer ----------
@@ -176,10 +281,34 @@ def test_writer_lands_under_observability_log_dir(
         assert path.parent == expected_dir
 
 
-# ---------- transforms ----------
+# ---------- LangFuse normalize + shared transforms ----------
 
 
-def test_transform_tool_calls_filters_by_type() -> None:
+def _to_tool_calls(observations):
+    return tool_calls_from_normalized_spans(
+        normalize_langfuse_observations(observations)
+    )
+
+
+def _to_routing_decisions(observations):
+    return routing_decisions_from_normalized_spans(
+        normalize_langfuse_observations(observations)
+    )
+
+
+def _to_step_count(observations):
+    return step_count_from_normalized_spans(
+        normalize_langfuse_observations(observations)
+    )
+
+
+def _to_generations(observations):
+    return generations_from_normalized_spans(
+        normalize_langfuse_observations(observations)
+    )
+
+
+def test_langfuse_tool_calls_filter_by_kind() -> None:
     observations = [
         {
             "type": LANGFUSE_TOOL_TYPE,
@@ -193,40 +322,36 @@ def test_transform_tool_calls_filters_by_type() -> None:
             "name": "billing",
         },
     ]
-    out = transform_observations_to_tool_calls(observations)
+    out = _to_tool_calls(observations)
     assert len(out) == 1
     assert out[0].tool_name == "lookup"
     assert out[0].arguments == {"alias": "alex"}
 
 
-def test_transform_tool_calls_skips_observations_missing_id() -> (
+def test_langfuse_tool_calls_skip_observations_missing_id() -> (
     None
 ):
     # An observation lacking an id can't anchor a citation.
-    # Treating it as skipped (rather than raising) lets us
-    # tolerate partial fetcher output without aborting the
-    # whole case.
+    # Skipping (rather than raising) lets us tolerate partial
+    # fetcher output without aborting the whole case.
     observations = [
-        {
-            "type": LANGFUSE_TOOL_TYPE,
-            "name": "lookup",
-        },
+        {"type": LANGFUSE_TOOL_TYPE, "name": "lookup"},
         {
             "type": LANGFUSE_TOOL_TYPE,
             "id": "t2",
             "name": "send",
         },
     ]
-    out = transform_observations_to_tool_calls(observations)
+    out = _to_tool_calls(observations)
     assert [c.tool_name for c in out] == ["send"]
 
 
-def test_transform_routing_decisions_resolves_from_agent() -> (
+def test_langfuse_routing_decisions_resolve_from_agent() -> (
     None
 ):
     # The renderer wants both the parent agent (who routed)
-    # and the target (who received). Resolving from_agent
-    # via the parent_observation_id lookup is the documented
+    # and the target (who received). Resolving from_agent via
+    # the parent_observation_id lookup is the documented
     # contract.
     observations = [
         {
@@ -241,30 +366,22 @@ def test_transform_routing_decisions_resolves_from_agent() -> (
             "parent_observation_id": "a1",
         },
     ]
-    out = transform_observations_to_routing_decisions(
-        observations
-    )
+    out = _to_routing_decisions(observations)
     target = next(d for d in out if d.span_id == "a2")
     assert target.from_agent == "supervisor"
 
 
-def test_transform_step_count_walks_top_level_only() -> (
-    None
-):
+def test_langfuse_step_count_walks_top_level_only() -> None:
     # Step semantics: an AGENT/TOOL whose direct parent is
     # the trace root or another AGENT counts as a step.
-    # Nested TOOL-under-TOOL retries do NOT. This is the
-    # property that distinguishes user-perceived reasoning
-    # steps from raw span counts.
+    # Nested TOOL-under-TOOL retries do NOT.
     observations = [
-        # Direct under root — step.
         {
             "type": LANGFUSE_AGENT_TYPE,
             "id": "a1",
             "name": "supervisor",
             "start_time": "2026-04-25T17:30:00Z",
         },
-        # Direct under a1 (an AGENT) — step.
         {
             "type": LANGFUSE_TOOL_TYPE,
             "id": "t1",
@@ -272,7 +389,6 @@ def test_transform_step_count_walks_top_level_only() -> (
             "parent_observation_id": "a1",
             "start_time": "2026-04-25T17:30:01Z",
         },
-        # Under t1 (a TOOL) — NOT a step.
         {
             "type": LANGFUSE_TOOL_TYPE,
             "id": "t1_retry",
@@ -281,19 +397,12 @@ def test_transform_step_count_walks_top_level_only() -> (
             "start_time": "2026-04-25T17:30:02Z",
         },
     ]
-    record = transform_observations_to_step_count(
-        observations
-    )
+    record = _to_step_count(observations)
     assert record.total_steps == 2
     assert record.step_span_ids == ("a1", "t1")
 
 
-def test_transform_step_count_orders_by_start_time() -> (
-    None
-):
-    # The ordering anchors the step list to the operator's
-    # mental timeline. A regression that fell back to insertion
-    # order would surface a wrong sequence in the report.
+def test_langfuse_step_count_orders_by_start_time() -> None:
     observations = [
         {
             "type": LANGFUSE_AGENT_TYPE,
@@ -306,13 +415,11 @@ def test_transform_step_count_orders_by_start_time() -> (
             "start_time": "2026-04-25T17:30:01Z",
         },
     ]
-    record = transform_observations_to_step_count(
-        observations
-    )
+    record = _to_step_count(observations)
     assert record.step_span_ids == ("first", "second")
 
 
-def test_transform_generations_extracts_usage_and_cost() -> (
+def test_langfuse_generations_extract_usage_and_cost() -> (
     None
 ):
     observations = [
@@ -334,9 +441,7 @@ def test_transform_generations_extracts_usage_and_cost() -> (
             "end_time": "2026-04-25T17:30:01Z",
         }
     ]
-    out = transform_observations_to_generations(
-        observations
-    )
+    out = _to_generations(observations)
     assert len(out) == 1
     g = out[0]
     assert g.total_tokens == 120
@@ -344,13 +449,12 @@ def test_transform_generations_extracts_usage_and_cost() -> (
     assert g.started_at == "2026-04-25T17:30:00Z"
 
 
-def test_transform_generations_rejects_negative_usage() -> (
+def test_langfuse_generations_reject_negative_usage() -> (
     None
 ):
     # A buggy provider that emits negative usage values must
-    # not silently inflate the generation record. The
-    # _non_negative_*_or_none helpers drop the value rather
-    # than passing it through unchanged.
+    # not silently inflate the generation record. Coercion
+    # drops the value rather than passing it through.
     observations = [
         {
             "type": LANGFUSE_GENERATION_TYPE,
@@ -362,14 +466,12 @@ def test_transform_generations_rejects_negative_usage() -> (
             },
         }
     ]
-    out = transform_observations_to_generations(
-        observations
-    )
+    out = _to_generations(observations)
     assert out[0].input_tokens is None
     assert out[0].output_tokens == 10
 
 
-def test_transform_generations_passes_datetime_through_iso() -> (
+def test_langfuse_generations_pass_datetime_through_iso() -> (
     None
 ):
     observations = [
@@ -381,9 +483,247 @@ def test_transform_generations_passes_datetime_through_iso() -> (
             ),
         }
     ]
-    out = transform_observations_to_generations(
-        observations
-    )
+    out = _to_generations(observations)
     assert out[0].started_at == (
         "2026-04-25T17:30:00+00:00"
     )
+
+
+# ---------- OTEL classifier ----------
+
+
+def test_otel_classify_routes_tool_via_operation() -> None:
+    attributes = {
+        ATTR_OPERATION_NAME: OPERATION_EXECUTE_TOOL,
+    }
+    assert (
+        classify_otel_span(attributes) is SpanKind.TOOL
+    )
+
+
+def test_otel_classify_routes_agent_via_operation() -> None:
+    attributes = {
+        ATTR_OPERATION_NAME: OPERATION_INVOKE_AGENT,
+    }
+    assert (
+        classify_otel_span(attributes) is SpanKind.AGENT
+    )
+
+
+def test_otel_classify_routes_generation_via_usage_attribute() -> (
+    None
+):
+    # An emitter that omits gen_ai.operation.name but stamps
+    # token usage should still be recognised as a GENERATION,
+    # otherwise the four token / cost / latency assertions
+    # would silently resolve to inconclusive.
+    attributes = {ATTR_USAGE_INPUT_TOKENS: 50}
+    assert (
+        classify_otel_span(attributes)
+        is SpanKind.GENERATION
+    )
+
+
+def test_otel_classify_falls_back_to_other() -> None:
+    assert (
+        classify_otel_span({"unrelated.attr": 1})
+        is SpanKind.OTHER
+    )
+
+
+# ---------- OTEL normalize ----------
+
+
+def _otel_resource_spans(*spans: dict) -> list[dict]:
+    return [
+        {
+            "resource": {"attributes": []},
+            "scopeSpans": [
+                {
+                    "scope": {"name": "agent.tracer"},
+                    "spans": list(spans),
+                }
+            ],
+        }
+    ]
+
+
+def _otel_attribute(key: str, value: object) -> dict:
+    if isinstance(value, bool):
+        return {"key": key, "value": {"boolValue": value}}
+    if isinstance(value, int):
+        return {
+            "key": key,
+            "value": {"intValue": str(value)},
+        }
+    if isinstance(value, float):
+        return {
+            "key": key,
+            "value": {"doubleValue": value},
+        }
+    return {"key": key, "value": {"stringValue": str(value)}}
+
+
+def test_otel_normalize_skips_spans_without_span_id() -> (
+    None
+):
+    spans = _otel_resource_spans(
+        {
+            "name": "anonymous",
+            "attributes": [],
+        },
+        {
+            "spanId": "abc",
+            "name": "named",
+            "attributes": [
+                _otel_attribute(
+                    ATTR_OPERATION_NAME, OPERATION_EXECUTE_TOOL
+                ),
+                _otel_attribute(ATTR_TOOL_NAME, "lookup"),
+            ],
+        },
+    )
+    out = normalize_otel_resource_spans(spans)
+    assert [s.span_id for s in out] == ["abc"]
+
+
+def test_otel_normalize_extracts_tool_name_and_parameters_from_attributes() -> (
+    None
+):
+    spans = _otel_resource_spans(
+        {
+            "spanId": "t1",
+            "name": "execute_tool people_directory.lookup",
+            "startTimeUnixNano": "1714065000000000000",
+            "endTimeUnixNano": "1714065001000000000",
+            "attributes": [
+                _otel_attribute(
+                    ATTR_OPERATION_NAME, OPERATION_EXECUTE_TOOL
+                ),
+                _otel_attribute(ATTR_TOOL_NAME, "lookup"),
+                _otel_attribute(
+                    ATTR_TOOL_PARAMETERS,
+                    json.dumps({"alias": "alex"}),
+                ),
+            ],
+        }
+    )
+    [normalized] = normalize_otel_resource_spans(spans)
+    assert normalized.kind is SpanKind.TOOL
+    assert normalized.name == "lookup"
+    assert normalized.input == {"alias": "alex"}
+    # The unix-nano start time is converted to UTC ISO so the
+    # canonical Generation / ToolCall records carry the same
+    # string representation as LangFuse traces would.
+    assert normalized.start_time is not None
+    assert normalized.start_time.endswith("+00:00")
+
+
+def test_otel_normalize_derives_total_tokens_when_only_halves_present() -> (
+    None
+):
+    # GenAI semconv leaves `total` optional; the normalizer
+    # derives it from input + output so max_total_tokens can
+    # resolve against agents that only emit per-direction
+    # counts.
+    spans = _otel_resource_spans(
+        {
+            "spanId": "g1",
+            "name": "chat",
+            "attributes": [
+                _otel_attribute(
+                    ATTR_OPERATION_NAME, "chat"
+                ),
+                _otel_attribute(
+                    ATTR_REQUEST_MODEL, "claude-x"
+                ),
+                _otel_attribute(
+                    ATTR_USAGE_INPUT_TOKENS, 50
+                ),
+                _otel_attribute(
+                    ATTR_USAGE_OUTPUT_TOKENS, 70
+                ),
+                _otel_attribute(
+                    ATTR_USAGE_INPUT_COST_USD, 0.001
+                ),
+                _otel_attribute(
+                    ATTR_USAGE_OUTPUT_COST_USD, 0.003
+                ),
+            ],
+        }
+    )
+    [normalized] = normalize_otel_resource_spans(spans)
+    assert normalized.kind is SpanKind.GENERATION
+    assert normalized.total_tokens == 120
+    assert normalized.input_tokens == 50
+    assert normalized.output_tokens == 70
+
+
+def test_otel_normalize_routes_agent_via_attribute_alone() -> (
+    None
+):
+    # An emitter that uses gen_ai.agent.name without setting
+    # gen_ai.operation.name should still classify as AGENT and
+    # surface as a routing decision.
+    spans = _otel_resource_spans(
+        {
+            "spanId": "a1",
+            "name": "supervisor",
+            "attributes": [
+                _otel_attribute(
+                    ATTR_AGENT_NAME, "supervisor"
+                ),
+            ],
+        },
+        {
+            "spanId": "a2",
+            "name": "billing",
+            "parentSpanId": "a1",
+            "attributes": [
+                _otel_attribute(
+                    ATTR_AGENT_NAME, "billing"
+                ),
+            ],
+        },
+    )
+    out = routing_decisions_from_normalized_spans(
+        normalize_otel_resource_spans(spans)
+    )
+    target = next(d for d in out if d.span_id == "a2")
+    assert target.from_agent == "supervisor"
+
+
+# ---------- Cross-source: shared transforms over hand-built spans ----------
+
+
+def test_shared_transforms_route_by_kind_only() -> None:
+    # A regression here would mean the source-agnostic
+    # transforms are inadvertently coupling on a source-
+    # specific field. Building NormalizedSpans directly (no
+    # langfuse / otel involvement) catches that.
+    spans = (
+        NormalizedSpan(
+            span_id="t1",
+            parent_span_id=None,
+            name="lookup",
+            kind=SpanKind.TOOL,
+            start_time="2026-04-25T17:30:00Z",
+            end_time=None,
+            input={"alias": "alex"},
+            output="found",
+        ),
+        NormalizedSpan(
+            span_id="a1",
+            parent_span_id=None,
+            name="supervisor",
+            kind=SpanKind.AGENT,
+            start_time="2026-04-25T17:30:00Z",
+            end_time=None,
+        ),
+    )
+    tool_calls = tool_calls_from_normalized_spans(spans)
+    routing = routing_decisions_from_normalized_spans(spans)
+    assert [c.tool_name for c in tool_calls] == ["lookup"]
+    assert [d.target_agent for d in routing] == [
+        "supervisor"
+    ]
