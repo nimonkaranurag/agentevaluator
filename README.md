@@ -52,7 +52,20 @@ orchestrate server start --with-langfuse        # -l also works
 
 Local Langfuse UI lands at [`http://localhost:3010`](http://localhost:3010) (creds: `orchestrate@ibm.com` / `orchestrate`). Sign in, generate an API key pair (Settings → API Keys), export them as `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` in the shell that runs `/evaluate-agent`. Tool-call / agent-decision / generation spans are auto-emitted by orchestrate — no SDK wiring lives in your tools. The fetcher pulls `usage` (input / output / total tokens), `cost_details` (USD), and `start_time` / `end_time` (latency) off every GENERATION observation and lands them in `generations.jsonl`, so the three generation-grounded assertions become evaluable. The bundled [`hr-agent-watsonx-orchestrate/agent.yaml`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml) declares calibrated `max_total_tokens` / `max_total_cost_usd` / `max_latency_ms` bounds on every case — running the demo with LangFuse enabled captures token usage, cost, and per-case wall-clock as pass/fail signal alongside the behavioural assertions.
 
-#### ⏩ Skip LangFuse entirely with `observability.ui_introspection`
+#### Use OpenTelemetry instead of LangFuse with `observability.otel`
+
+For agents already emitting OpenTelemetry GenAI semantic-convention spans to a Tempo-style query backend, declare `observability.otel` in place of `observability.langfuse` (the two are mutually exclusive — declaring both is rejected). The fetcher hits `<endpoint>/api/search?tags=session.id=<case>` for matching trace ids and `<endpoint>/api/traces/<id>` for each trace's resourceSpans, then maps GenAI semconv attributes (`gen_ai.operation.name`, `gen_ai.tool.name`, `gen_ai.agent.name`, `gen_ai.usage.*`, `gen_ai.request.model`) onto the same canonical schema LangFuse traces produce — same on-disk JSONL, same scoring path, same assertion coverage:
+
+```yaml
+observability:
+  otel:
+    endpoint: https://tempo.example.com
+    headers_env: OTEL_EXPORTER_OTLP_HEADERS   # optional; OTLP "key=value,key2=value2" format
+```
+
+Backends that don't natively expose Tempo's `/api/search` + `/api/traces/<id>` shape (Jaeger, Zipkin, Phoenix, etc.) front the fetcher through a Tempo-compatible shim. `/onboard-evaluate-agent` asks for endpoint + headers env one turn at a time during Step 7a.
+
+#### ⏩ Skip a trace backend entirely with `observability.ui_introspection`
 
 When the chat UI itself surfaces tool calls + parameters (Orchestrate's reasoning panel, LangSmith Studio's run pane, AutoGen Studio's debug drawer, your own debug element), declare `observability.ui_introspection` and the evaluator extracts the same structured evidence directly from the captured post-submit DOM — same on-disk JSONL, same scoring path, no separate trace backend required (of-course, with a limited view of final metrics - <ins>suited for basic higher-level eval insights: integration tests, tool use, user query resolution success, etc.</ins>):
 
@@ -71,7 +84,7 @@ observability:
       - routing_decisions
 ```
 
-`/onboard-evaluate-agent` asks whether your chat UI surfaces this signal during onboarding and walks you through `description`, `reveal_actions`, and `exposes` one turn at a time. Both paths can coexist on the same manifest — when both are declared, the LangFuse fetch wins and UI extraction acts as the fallback. See [`examples/hr-agent-watsonx-orchestrate/agent.yaml`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml) for the full shape against the Orchestrate UI.
+`/onboard-evaluate-agent` asks whether your chat UI surfaces this signal during onboarding and walks you through `description`, `reveal_actions`, and `exposes` one turn at a time. The trace backend (LangFuse OR OTEL) and `ui_introspection` can coexist on the same manifest — when both are declared, the trace fetch wins and UI extraction acts as the fallback. See [`examples/hr-agent-watsonx-orchestrate/agent.yaml`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml) for the full shape against the Orchestrate UI.
 
 #### Happy-path testing/POC
 

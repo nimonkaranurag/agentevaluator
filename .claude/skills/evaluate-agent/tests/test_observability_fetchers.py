@@ -164,7 +164,9 @@ def test_resolve_otel_credentials_raises_when_env_missing(
                 headers_env="OTEL_EXPORTER_OTLP_HEADERS"
             )
         )
-    assert info.value.env_var == "OTEL_EXPORTER_OTLP_HEADERS"
+    assert (
+        info.value.env_var == "OTEL_EXPORTER_OTLP_HEADERS"
+    )
 
 
 def test_resolve_otel_credentials_rejects_pair_without_equals(
@@ -496,18 +498,14 @@ def test_otel_classify_routes_tool_via_operation() -> None:
     attributes = {
         ATTR_OPERATION_NAME: OPERATION_EXECUTE_TOOL,
     }
-    assert (
-        classify_otel_span(attributes) is SpanKind.TOOL
-    )
+    assert classify_otel_span(attributes) is SpanKind.TOOL
 
 
 def test_otel_classify_routes_agent_via_operation() -> None:
     attributes = {
         ATTR_OPERATION_NAME: OPERATION_INVOKE_AGENT,
     }
-    assert (
-        classify_otel_span(attributes) is SpanKind.AGENT
-    )
+    assert classify_otel_span(attributes) is SpanKind.AGENT
 
 
 def test_otel_classify_routes_generation_via_usage_attribute() -> (
@@ -561,7 +559,10 @@ def _otel_attribute(key: str, value: object) -> dict:
             "key": key,
             "value": {"doubleValue": value},
         }
-    return {"key": key, "value": {"stringValue": str(value)}}
+    return {
+        "key": key,
+        "value": {"stringValue": str(value)},
+    }
 
 
 def test_otel_normalize_skips_spans_without_span_id() -> (
@@ -577,7 +578,8 @@ def test_otel_normalize_skips_spans_without_span_id() -> (
             "name": "named",
             "attributes": [
                 _otel_attribute(
-                    ATTR_OPERATION_NAME, OPERATION_EXECUTE_TOOL
+                    ATTR_OPERATION_NAME,
+                    OPERATION_EXECUTE_TOOL,
                 ),
                 _otel_attribute(ATTR_TOOL_NAME, "lookup"),
             ],
@@ -598,7 +600,8 @@ def test_otel_normalize_extracts_tool_name_and_parameters_from_attributes() -> (
             "endTimeUnixNano": "1714065001000000000",
             "attributes": [
                 _otel_attribute(
-                    ATTR_OPERATION_NAME, OPERATION_EXECUTE_TOOL
+                    ATTR_OPERATION_NAME,
+                    OPERATION_EXECUTE_TOOL,
                 ),
                 _otel_attribute(ATTR_TOOL_NAME, "lookup"),
                 _otel_attribute(
@@ -680,9 +683,7 @@ def test_otel_normalize_routes_agent_via_attribute_alone() -> (
             "name": "billing",
             "parentSpanId": "a1",
             "attributes": [
-                _otel_attribute(
-                    ATTR_AGENT_NAME, "billing"
-                ),
+                _otel_attribute(ATTR_AGENT_NAME, "billing"),
             ],
         },
     )
