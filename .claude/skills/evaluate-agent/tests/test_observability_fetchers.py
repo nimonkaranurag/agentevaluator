@@ -22,8 +22,10 @@ from evaluate_agent.observability_fetchers import (
     LANGFUSE_AGENT_TYPE,
     LANGFUSE_GENERATION_TYPE,
     LANGFUSE_TOOL_TYPE,
-    NormalizedSpan,
-    SpanKind,
+    AgentSpan,
+    GenerationSpan,
+    OtherSpan,
+    ToolSpan,
     normalize_langfuse_observations,
     normalize_otel_resource_spans,
     observability_log_dir_for,
@@ -49,7 +51,6 @@ from evaluate_agent.observability_fetchers.otel import (
     ATTR_USAGE_OUTPUT_TOKENS,
     OPERATION_EXECUTE_TOOL,
     OPERATION_INVOKE_AGENT,
-    classify_otel_span,
 )
 from evaluate_agent.scoring.observability.schema import (
     StepCount,
@@ -404,12 +405,18 @@ def test_langfuse_step_count_walks_top_level_only() -> None:
     assert record.step_span_ids == ("a1", "t1")
 
 
-def test_langfuse_step_count_orders_by_start_time() -> None:
+def test_langfuse_step_count_orders_by_parsed_timestamp() -> (
+    None
+):
+    # Mixing TZ representations would break a naive
+    # lexicographic sort (`+00:00` sorts before `Z` for the
+    # same instant). Parsing to datetime is the only sort that
+    # gets this right.
     observations = [
         {
             "type": LANGFUSE_AGENT_TYPE,
             "id": "second",
-            "start_time": "2026-04-25T17:30:05Z",
+            "start_time": "2026-04-25T17:30:05+00:00",
         },
         {
             "type": LANGFUSE_AGENT_TYPE,
@@ -491,45 +498,27 @@ def test_langfuse_generations_pass_datetime_through_iso() -> (
     )
 
 
-# ---------- OTEL classifier ----------
-
-
-def test_otel_classify_routes_tool_via_operation() -> None:
-    attributes = {
-        ATTR_OPERATION_NAME: OPERATION_EXECUTE_TOOL,
-    }
-    assert classify_otel_span(attributes) is SpanKind.TOOL
-
-
-def test_otel_classify_routes_agent_via_operation() -> None:
-    attributes = {
-        ATTR_OPERATION_NAME: OPERATION_INVOKE_AGENT,
-    }
-    assert classify_otel_span(attributes) is SpanKind.AGENT
-
-
-def test_otel_classify_routes_generation_via_usage_attribute() -> (
+def test_langfuse_unknown_type_normalizes_to_other_span() -> (
     None
 ):
-    # An emitter that omits gen_ai.operation.name but stamps
-    # token usage should still be recognised as a GENERATION,
-    # otherwise the four token / cost / latency assertions
-    # would silently resolve to inconclusive.
-    attributes = {ATTR_USAGE_INPUT_TOKENS: 50}
-    assert (
-        classify_otel_span(attributes)
-        is SpanKind.GENERATION
-    )
+    # An observation with an unrecognised type must round-trip
+    # through normalize as an OtherSpan (not be dropped) so the
+    # span id is still available to the parent-id index used by
+    # step_count walks.
+    observations = [
+        {
+            "type": "SOMETHING_NEW",
+            "id": "x1",
+            "name": "spec-extension",
+        }
+    ]
+    spans = normalize_langfuse_observations(observations)
+    assert len(spans) == 1
+    assert isinstance(spans[0], OtherSpan)
+    assert spans[0].span_id == "x1"
 
 
-def test_otel_classify_falls_back_to_other() -> None:
-    assert (
-        classify_otel_span({"unrelated.attr": 1})
-        is SpanKind.OTHER
-    )
-
-
-# ---------- OTEL normalize ----------
+# ---------- OTEL classification (exercised through normalize) ----------
 
 
 def _otel_resource_spans(*spans: dict) -> list[dict]:
@@ -565,54 +554,117 @@ def _otel_attribute(key: str, value: object) -> dict:
     }
 
 
+def _normalize_one_otel(raw_attributes):
+    spans = normalize_otel_resource_spans(
+        _otel_resource_spans(
+            {
+                "spanId": "s1",
+                "name": "probe",
+                "attributes": raw_attributes,
+            }
+        )
+    )
+    assert len(spans) == 1
+    return spans[0]
+
+
+def test_otel_classify_routes_tool_via_operation() -> None:
+    span = _normalize_one_otel(
+        [
+            _otel_attribute(
+                ATTR_OPERATION_NAME, OPERATION_EXECUTE_TOOL
+            )
+        ]
+    )
+    assert isinstance(span, ToolSpan)
+
+
+def test_otel_classify_routes_agent_via_operation() -> None:
+    span = _normalize_one_otel(
+        [
+            _otel_attribute(
+                ATTR_OPERATION_NAME, OPERATION_INVOKE_AGENT
+            )
+        ]
+    )
+    assert isinstance(span, AgentSpan)
+
+
+def test_otel_classify_routes_generation_via_usage_attribute() -> (
+    None
+):
+    # An emitter that omits gen_ai.operation.name but stamps
+    # token usage should still be recognised as a generation,
+    # otherwise the four token / cost / latency assertions
+    # would silently resolve to inconclusive.
+    span = _normalize_one_otel(
+        [_otel_attribute(ATTR_USAGE_INPUT_TOKENS, 50)]
+    )
+    assert isinstance(span, GenerationSpan)
+
+
+def test_otel_classify_falls_back_to_other_span() -> None:
+    span = _normalize_one_otel(
+        [_otel_attribute("unrelated.attr", 1)]
+    )
+    assert isinstance(span, OtherSpan)
+
+
+# ---------- OTEL normalize ----------
+
+
 def test_otel_normalize_skips_spans_without_span_id() -> (
     None
 ):
-    spans = _otel_resource_spans(
-        {
-            "name": "anonymous",
-            "attributes": [],
-        },
-        {
-            "spanId": "abc",
-            "name": "named",
-            "attributes": [
-                _otel_attribute(
-                    ATTR_OPERATION_NAME,
-                    OPERATION_EXECUTE_TOOL,
-                ),
-                _otel_attribute(ATTR_TOOL_NAME, "lookup"),
-            ],
-        },
+    spans = normalize_otel_resource_spans(
+        _otel_resource_spans(
+            {"name": "anonymous", "attributes": []},
+            {
+                "spanId": "abc",
+                "name": "named",
+                "attributes": [
+                    _otel_attribute(
+                        ATTR_OPERATION_NAME,
+                        OPERATION_EXECUTE_TOOL,
+                    ),
+                    _otel_attribute(
+                        ATTR_TOOL_NAME, "lookup"
+                    ),
+                ],
+            },
+        )
     )
-    out = normalize_otel_resource_spans(spans)
-    assert [s.span_id for s in out] == ["abc"]
+    assert [s.span_id for s in spans] == ["abc"]
 
 
 def test_otel_normalize_extracts_tool_name_and_parameters_from_attributes() -> (
     None
 ):
-    spans = _otel_resource_spans(
-        {
-            "spanId": "t1",
-            "name": "execute_tool people_directory.lookup",
-            "startTimeUnixNano": "1714065000000000000",
-            "endTimeUnixNano": "1714065001000000000",
-            "attributes": [
-                _otel_attribute(
-                    ATTR_OPERATION_NAME,
-                    OPERATION_EXECUTE_TOOL,
-                ),
-                _otel_attribute(ATTR_TOOL_NAME, "lookup"),
-                _otel_attribute(
-                    ATTR_TOOL_PARAMETERS,
-                    json.dumps({"alias": "alex"}),
-                ),
-            ],
-        }
+    spans = normalize_otel_resource_spans(
+        _otel_resource_spans(
+            {
+                "spanId": "t1",
+                "name": "execute_tool people_directory.lookup",
+                "startTimeUnixNano": "1714065000000000000",
+                "endTimeUnixNano": "1714065001000000000",
+                "attributes": [
+                    _otel_attribute(
+                        ATTR_OPERATION_NAME,
+                        OPERATION_EXECUTE_TOOL,
+                    ),
+                    _otel_attribute(
+                        ATTR_TOOL_NAME, "lookup"
+                    ),
+                    _otel_attribute(
+                        ATTR_TOOL_PARAMETERS,
+                        json.dumps({"alias": "alex"}),
+                    ),
+                ],
+            }
+        )
     )
-    [normalized] = normalize_otel_resource_spans(spans)
-    assert normalized.kind is SpanKind.TOOL
+    [normalized] = spans
+    assert isinstance(normalized, ToolSpan)
     assert normalized.name == "lookup"
     assert normalized.input == {"alias": "alex"}
     # The unix-nano start time is converted to UTC ISO so the
@@ -629,34 +681,36 @@ def test_otel_normalize_derives_total_tokens_when_only_halves_present() -> (
     # derives it from input + output so max_total_tokens can
     # resolve against agents that only emit per-direction
     # counts.
-    spans = _otel_resource_spans(
-        {
-            "spanId": "g1",
-            "name": "chat",
-            "attributes": [
-                _otel_attribute(
-                    ATTR_OPERATION_NAME, "chat"
-                ),
-                _otel_attribute(
-                    ATTR_REQUEST_MODEL, "claude-x"
-                ),
-                _otel_attribute(
-                    ATTR_USAGE_INPUT_TOKENS, 50
-                ),
-                _otel_attribute(
-                    ATTR_USAGE_OUTPUT_TOKENS, 70
-                ),
-                _otel_attribute(
-                    ATTR_USAGE_INPUT_COST_USD, 0.001
-                ),
-                _otel_attribute(
-                    ATTR_USAGE_OUTPUT_COST_USD, 0.003
-                ),
-            ],
-        }
+    spans = normalize_otel_resource_spans(
+        _otel_resource_spans(
+            {
+                "spanId": "g1",
+                "name": "chat",
+                "attributes": [
+                    _otel_attribute(
+                        ATTR_OPERATION_NAME, "chat"
+                    ),
+                    _otel_attribute(
+                        ATTR_REQUEST_MODEL, "claude-x"
+                    ),
+                    _otel_attribute(
+                        ATTR_USAGE_INPUT_TOKENS, 50
+                    ),
+                    _otel_attribute(
+                        ATTR_USAGE_OUTPUT_TOKENS, 70
+                    ),
+                    _otel_attribute(
+                        ATTR_USAGE_INPUT_COST_USD, 0.001
+                    ),
+                    _otel_attribute(
+                        ATTR_USAGE_OUTPUT_COST_USD, 0.003
+                    ),
+                ],
+            }
+        )
     )
-    [normalized] = normalize_otel_resource_spans(spans)
-    assert normalized.kind is SpanKind.GENERATION
+    [normalized] = spans
+    assert isinstance(normalized, GenerationSpan)
     assert normalized.total_tokens == 120
     assert normalized.input_tokens == 50
     assert normalized.output_tokens == 70
@@ -666,30 +720,32 @@ def test_otel_normalize_routes_agent_via_attribute_alone() -> (
     None
 ):
     # An emitter that uses gen_ai.agent.name without setting
-    # gen_ai.operation.name should still classify as AGENT and
-    # surface as a routing decision.
-    spans = _otel_resource_spans(
-        {
-            "spanId": "a1",
-            "name": "supervisor",
-            "attributes": [
-                _otel_attribute(
-                    ATTR_AGENT_NAME, "supervisor"
-                ),
-            ],
-        },
-        {
-            "spanId": "a2",
-            "name": "billing",
-            "parentSpanId": "a1",
-            "attributes": [
-                _otel_attribute(ATTR_AGENT_NAME, "billing"),
-            ],
-        },
+    # gen_ai.operation.name should still classify as an agent
+    # and surface as a routing decision.
+    spans = normalize_otel_resource_spans(
+        _otel_resource_spans(
+            {
+                "spanId": "a1",
+                "name": "supervisor",
+                "attributes": [
+                    _otel_attribute(
+                        ATTR_AGENT_NAME, "supervisor"
+                    )
+                ],
+            },
+            {
+                "spanId": "a2",
+                "name": "billing",
+                "parentSpanId": "a1",
+                "attributes": [
+                    _otel_attribute(
+                        ATTR_AGENT_NAME, "billing"
+                    )
+                ],
+            },
+        )
     )
-    out = routing_decisions_from_normalized_spans(
-        normalize_otel_resource_spans(spans)
-    )
+    out = routing_decisions_from_normalized_spans(spans)
     target = next(d for d in out if d.span_id == "a2")
     assert target.from_agent == "supervisor"
 
@@ -697,27 +753,25 @@ def test_otel_normalize_routes_agent_via_attribute_alone() -> (
 # ---------- Cross-source: shared transforms over hand-built spans ----------
 
 
-def test_shared_transforms_route_by_kind_only() -> None:
+def test_shared_transforms_route_by_subclass_only() -> None:
     # A regression here would mean the source-agnostic
     # transforms are inadvertently coupling on a source-
-    # specific field. Building NormalizedSpans directly (no
-    # langfuse / otel involvement) catches that.
+    # specific field. Building the union variants directly
+    # (no langfuse / otel involvement) catches that.
     spans = (
-        NormalizedSpan(
+        ToolSpan(
             span_id="t1",
             parent_span_id=None,
             name="lookup",
-            kind=SpanKind.TOOL,
             start_time="2026-04-25T17:30:00Z",
             end_time=None,
             input={"alias": "alex"},
             output="found",
         ),
-        NormalizedSpan(
+        AgentSpan(
             span_id="a1",
             parent_span_id=None,
             name="supervisor",
-            kind=SpanKind.AGENT,
             start_time="2026-04-25T17:30:00Z",
             end_time=None,
         ),

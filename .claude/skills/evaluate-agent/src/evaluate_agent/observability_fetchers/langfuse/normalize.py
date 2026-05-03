@@ -47,25 +47,27 @@ def _normalize_one(
     span_id = string_or_none(observation.get("id"))
     if span_id is None:
         return None
-    common = {
-        "span_id": span_id,
-        "parent_span_id": string_or_none(
+    base = dict(
+        span_id=span_id,
+        parent_span_id=string_or_none(
             observation.get("parent_observation_id")
         ),
-        "name": string_or_none(observation.get("name")),
-        "start_time": iso_timestamp_or_none(
+        start_time=iso_timestamp_or_none(
             observation.get("start_time")
         ),
-        "end_time": iso_timestamp_or_none(
+        end_time=iso_timestamp_or_none(
             observation.get("end_time")
         ),
-    }
+    )
+    name = string_or_none(observation.get("name"))
     observation_type = string_or_none(
         observation.get("type")
     )
+
     if observation_type == LANGFUSE_TOOL_TYPE:
         return ToolSpan(
-            **common,
+            **base,
+            name=name,
             input=dict_or_none(observation.get("input")),
             output=string_or_none(
                 observation.get("output")
@@ -73,7 +75,8 @@ def _normalize_one(
         )
     if observation_type == LANGFUSE_AGENT_TYPE:
         return AgentSpan(
-            **common,
+            **base,
+            name=name,
             routing_reason=_routing_reason(observation),
         )
     if observation_type == LANGFUSE_GENERATION_TYPE:
@@ -82,7 +85,8 @@ def _normalize_one(
             observation.get("cost_details")
         )
         return GenerationSpan(
-            **common,
+            **base,
+            name=name,
             model=string_or_none(observation.get("model")),
             input_tokens=non_negative_int_or_none(
                 usage.get("input")
@@ -103,7 +107,7 @@ def _normalize_one(
                 cost.get("total")
             ),
         )
-    return OtherSpan(**common)
+    return OtherSpan(**base, name=name)
 
 
 def _routing_reason(

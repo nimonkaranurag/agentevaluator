@@ -76,34 +76,33 @@ def _normalize_one(
     if span_id is None:
         return None
     attributes = _flatten_attributes(raw.get("attributes"))
-    common = {
-        "span_id": span_id,
-        "parent_span_id": string_or_none(
+    base = dict(
+        span_id=span_id,
+        parent_span_id=string_or_none(
             raw.get("parentSpanId")
         ),
-        "name": _span_name_default(raw),
-        "start_time": _unix_nano_to_iso(
+        start_time=_unix_nano_to_iso(
             raw.get("startTimeUnixNano")
         ),
-        "end_time": _unix_nano_to_iso(
+        end_time=_unix_nano_to_iso(
             raw.get("endTimeUnixNano")
         ),
-    }
+    )
+    fallback_name = string_or_none(raw.get("name"))
     operation = attributes.get(ATTR_OPERATION_NAME)
+
     if (
         operation == OPERATION_EXECUTE_TOOL
         or ATTR_TOOL_NAME in attributes
     ):
         return ToolSpan(
-            **{
-                **common,
-                "name": (
-                    string_or_none(
-                        attributes.get(ATTR_TOOL_NAME)
-                    )
-                    or common["name"]
-                ),
-            },
+            **base,
+            name=(
+                string_or_none(
+                    attributes.get(ATTR_TOOL_NAME)
+                )
+                or fallback_name
+            ),
             input=_tool_arguments(attributes),
             output=string_or_none(
                 attributes.get(ATTR_TOOL_OUTPUT)
@@ -114,15 +113,13 @@ def _normalize_one(
         or ATTR_AGENT_NAME in attributes
     ):
         return AgentSpan(
-            **{
-                **common,
-                "name": (
-                    string_or_none(
-                        attributes.get(ATTR_AGENT_NAME)
-                    )
-                    or common["name"]
-                ),
-            },
+            **base,
+            name=(
+                string_or_none(
+                    attributes.get(ATTR_AGENT_NAME)
+                )
+                or fallback_name
+            ),
             routing_reason=string_or_none(
                 attributes.get(ATTR_ROUTING_REASON)
             ),
@@ -133,7 +130,8 @@ def _normalize_one(
         or ATTR_USAGE_OUTPUT_TOKENS in attributes
     ):
         return GenerationSpan(
-            **common,
+            **base,
+            name=fallback_name,
             model=string_or_none(
                 attributes.get(ATTR_REQUEST_MODEL)
             ),
@@ -154,13 +152,7 @@ def _normalize_one(
                 attributes.get(ATTR_USAGE_TOTAL_COST_USD)
             ),
         )
-    return OtherSpan(**common)
-
-
-def _span_name_default(
-    raw: Mapping[str, Any],
-) -> str | None:
-    return string_or_none(raw.get("name"))
+    return OtherSpan(**base, name=fallback_name)
 
 
 def _flatten_attributes(raw: Any) -> dict[str, Any]:
