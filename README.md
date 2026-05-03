@@ -88,7 +88,7 @@ observability:
 
 <br>
 
-## CI integration 
+## CI integration 📜
 
 Every script under [`.claude/skills/evaluate-agent/scripts/`](.claude/skills/evaluate-agent/scripts/) (`validate_manifest`, `discover_manifests`, `plan_swarm`, `score_case`, `score_agent`, `render_report`, `fetch_observability`, `validate_narrative`) accepts the same two CI-oriented flags:
 
@@ -104,7 +104,7 @@ score_agent.py plan.json --metrics runs/myagent/20260502T120000Z/score.metrics.j
 render_report.py score.json --metrics runs/myagent/20260502T120000Z/render.metrics.json > report.md
 ```
 
-## Regression detection against a baseline
+## Regression detection against a baseline 📉
 
 `score_agent.py` and `render_report.py` accept `--baseline PATH` pointing at a prior `AgentScore` JSON for the same agent. The diff pairs every assertion across runs by `(case_id, assertion_kind, target)` and categorizes each transition as `newly_failing`, `newly_inconclusive`, `newly_passing`, `unchanged`, `introduced`, or `removed`.
 

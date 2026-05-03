@@ -1,5 +1,5 @@
 """
-Failure-mode tests for langfuse credential resolution, observability writer, and the LangFuse-to-on-disk transforms.
+Failure-mode tests for the observability_fetchers package: credentials, writer, and LangFuse transforms.
 """
 
 from __future__ import annotations
@@ -9,24 +9,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from evaluate_agent.common.errors.observability_fetcher import (
+from evaluate_agent.common.errors.observability_fetchers import (
     LangfuseCredentialEnvVarMissing,
 )
 from evaluate_agent.manifest.schema import LangfuseSource
-from evaluate_agent.observability_fetcher.langfuse_credentials import (
-    resolve_langfuse_credentials,
-)
-from evaluate_agent.observability_fetcher.langfuse_transform import (
+from evaluate_agent.observability_fetchers import (
     LANGFUSE_AGENT_TYPE,
     LANGFUSE_GENERATION_TYPE,
     LANGFUSE_TOOL_TYPE,
+    observability_log_dir_for,
+    resolve_langfuse_credentials,
     transform_observations_to_generations,
     transform_observations_to_routing_decisions,
     transform_observations_to_step_count,
     transform_observations_to_tool_calls,
-)
-from evaluate_agent.observability_fetcher.observability_writer import (
-    observability_log_dir_for,
     write_observability_artifacts,
 )
 from evaluate_agent.scoring.observability.schema import (
