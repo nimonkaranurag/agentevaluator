@@ -38,11 +38,7 @@ The repo ships with a ready-to-run example so you can see the full loop before w
 - **[`hr-agent-watsonx-orchestrate`](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/agent.yaml)**
 → Check the [walkthrough](.claude/skills/evaluate-agent/examples/hr-agent-watsonx-orchestrate/_resources/README.md) to see how it all connects.
 
-#### Enable orchestrate's built-in Langfuse (one-time, local dev) [OPTIONAL]
-
-> The LangFuse integration is provided in this skill for more opaque runtimes than Orchestrate, in the Orchestrate ChatUI -- tool use is visible in a reasoning panel. 
-> Thus, metrics like max_steps in the conversation can simply be inferred by counting the number of agent and user turns manually (since there are no hidden steps in the Orchestrate ChatUI).
-> However, for deeper insights like token usage statistics - a LangFuse/OTel trace emitter must be available in the agent's runtime.
+#### 🧐 Enable orchestrate's built-in Langfuse
 
 Orchestrate's Developer Edition ships with Langfuse built in but it's opt-in — start the server with the flag below so the trace-backend-only assertions (`max_total_tokens`, `max_total_cost_usd`, `max_latency_ms`, on top of the four UI-introspectable ones — `must_call`, `must_not_call`, `must_route_to`, `max_steps`) resolve to passed/failed instead of inconclusive:
 
@@ -66,6 +62,9 @@ observability:
 Backends that don't natively expose Tempo's `/api/search` + `/api/traces/<id>` shape (Jaeger, Zipkin, Phoenix, etc.) front the fetcher through a Tempo-compatible shim. `/onboard-evaluate-agent` asks for endpoint + headers env one turn at a time during Step 7a.
 
 #### ⏩ Skip a trace backend entirely with `observability.ui_introspection`
+
+> The motivation for this feature is to provide a bare-bones mechanism for performing eval in opaque runtimes and scenarios where an agent is expected
+> to render clickable widgets while resolving user queries, at a bare minimum - this feature offers basic integration testing
 
 When the chat UI itself surfaces tool calls + parameters (Orchestrate's reasoning panel, LangSmith Studio's run pane, AutoGen Studio's debug drawer, your own debug element), declare `observability.ui_introspection` and the evaluator extracts the same structured evidence directly from the captured post-submit DOM — same on-disk JSONL, same scoring path, no separate trace backend required (of-course, with a limited view of final metrics - <ins>suited for basic higher-level eval insights: integration tests, tool use, user query resolution success, etc.</ins>):
 
@@ -97,7 +96,7 @@ observability:
 
 <br>
 
-![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI for basic eval metrics, and/or optionally using its trace emitting backend for deeper insights*
+![alt-text](./assets/demo-4.png) *for IBM Orchestrate-lite, this means using playwright to interact with the deployed agent through the ADK built-in Orchestrate ChatUI for basic eval metrics, and/or optionally using its trace emitting backend for deeper insights (recommended approach for eval, playwright is sensory and relevant for automating workflows with clickable widgets/live integration testing)*
 
 <br>
 
