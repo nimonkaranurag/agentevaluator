@@ -1,5 +1,5 @@
 """
-Persist a fetched observability payload to the standard on-disk format.
+Persist canonical observability records to the standard on-disk layout.
 """
 
 from __future__ import annotations

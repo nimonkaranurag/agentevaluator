@@ -23,14 +23,17 @@ coverage:
   # explicitly rather than padding tests with import-only cases.
   omit:
     - "*/__init__.py"
-    # langfuse_fetcher.py is the LangFuse SDK integration —
-    # exercising its real code paths requires a running
-    # LangFuse instance. The "no flunky mocks" rule (saved
-    # feedback) rules out a mock-only test suite that would
-    # cover lines without exercising real SDK behavior.
-    - "*/observability_fetcher/langfuse_fetcher.py"
-    # Driver modules talk to a Playwright browser through MCP —
-    # same constraint: real-browser-only, no flunky mocks.
+    # The per-source clients and orchestrators front the
+    # respective trace backends — exercising their real code
+    # paths requires a running LangFuse instance or a Tempo-
+    # style OTLP endpoint, so they are excluded from coverage
+    # rather than asserted via mocks.
+    - "*/observability_fetchers/langfuse/client.py"
+    - "*/observability_fetchers/langfuse/fetcher.py"
+    - "*/observability_fetchers/otel/client.py"
+    - "*/observability_fetchers/otel/fetcher.py"
+    # Driver modules talk to a Playwright browser through MCP
+    # and are exercised end-to-end against a real browser.
     - "*/driver/*"
   reports:
     - term-missing

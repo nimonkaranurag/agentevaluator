@@ -11,20 +11,23 @@
 """
 Fetch upstream observability traces and write them to the standard format.
 
-Reads manifest.observability.langfuse, queries the declared LangFuse host
-for traces matching the case (filtered by session_id and an optional
-time window), maps each trace's observations to the on-disk
-observability schema (TOOL -> tool_calls.jsonl, AGENT ->
-routing_decisions.jsonl, GENERATION count -> step_count.json), and
-persists them under <case-dir>/trace/observability/.
+Reads manifest.observability and dispatches to the declared backend:
+observability.langfuse routes the LangFuse SDK; observability.otel
+routes a Tempo-style OTLP/HTTP query against the declared collector.
+Either path queries the backend for traces matching the case (filtered
+by session_id and an optional time window), normalises spans onto a
+single canonical shape, and persists tool_calls.jsonl,
+routing_decisions.jsonl, step_count.json, and generations.jsonl under
+<case-dir>/trace/observability/.
 
 Diagnostic logging (errors, warnings) is emitted on stderr in either
 text or JSON form, controlled by --log-format.
 
 Exits 0 once the fetch completes (regardless of trace or observation
 count). Exits 1 on any manifest, case-selection, case-directory,
-credential, or LangFuse query error (logged to stderr with the
-actionable recovery procedure embedded in the message).
+source-selection (none or multiple sources declared), credential, or
+backend-query error (logged to stderr with the actionable recovery
+procedure embedded in the message).
 
 When --metrics PATH is supplied, the script writes a single JSON
 document to PATH at completion that records per-phase wall-clock timing
@@ -46,8 +49,9 @@ sys.path.insert(0, str(_SRC_DIR))
 from evaluate_agent.common.errors.manifest import (  # noqa: E402
     ManifestError,
 )
-from evaluate_agent.common.errors.observability_fetcher import (  # noqa: E402
-    LangfuseSourceNotDeclared,
+from evaluate_agent.common.errors.observability_fetchers import (  # noqa: E402
+    MultipleObservabilitySourcesDeclared,
+    NoObservabilitySourceDeclared,
     ObservabilityFetcherError,
 )
 from evaluate_agent.common.phase_metrics import (  # noqa: E402
@@ -60,9 +64,13 @@ from evaluate_agent.common.script_logging import (  # noqa: E402
 from evaluate_agent.manifest import (  # noqa: E402
     load_manifest,
 )
-from evaluate_agent.observability_fetcher import (  # noqa: E402
+from evaluate_agent.manifest.schema import (  # noqa: E402
+    Observability,
+)
+from evaluate_agent.observability_fetchers import (  # noqa: E402
     FetchedObservability,
     fetch_langfuse_observability,
+    fetch_otel_observability,
 )
 
 
@@ -72,9 +80,11 @@ def _parse_args(
     parser = argparse.ArgumentParser(
         prog="fetch_observability",
         description=(
-            "Fetch LangFuse traces for one captured "
-            "case and persist them as the standard "
-            "on-disk observability logs."
+            "Fetch traces for one captured case from "
+            "the manifest's declared observability "
+            "backend (LangFuse or OTEL) and persist "
+            "them as the standard on-disk observability "
+            "logs."
         ),
     )
     parser.add_argument(
@@ -108,11 +118,11 @@ def _parse_args(
         "--session-id",
         default=None,
         help=(
-            "LangFuse session_id to filter traces by. "
-            "Default: the case id. The agent under "
-            "evaluation must instrument its LangFuse "
-            "traces with this session_id for the "
-            "fetcher to find them."
+            "Session id to filter traces by. Default: "
+            "the case id. The agent under evaluation "
+            "must stamp its traces with this session id "
+            "(LangFuse session_id, or OTEL session.id "
+            "attribute) for the fetcher to find them."
         ),
     )
     parser.add_argument(
@@ -121,8 +131,8 @@ def _parse_args(
         type=_parse_iso_timestamp,
         help=(
             "ISO-8601 lower bound on trace timestamps "
-            "(inclusive). Narrows the LangFuse query "
-            "when the same session_id has been used "
+            "(inclusive). Narrows the backend query "
+            "when the same session id has been used "
             "across multiple runs. Default: no lower "
             "bound."
         ),
@@ -170,8 +180,56 @@ def _parse_iso_timestamp(value: str) -> datetime:
         ) from exc
 
 
+def _select_source_kind(
+    observability: Observability,
+    *,
+    manifest_path: Path,
+) -> str:
+    declared = []
+    if observability.langfuse is not None:
+        declared.append("langfuse")
+    if observability.otel is not None:
+        declared.append("otel")
+    if not declared:
+        raise NoObservabilitySourceDeclared(manifest_path)
+    if len(declared) > 1:
+        raise MultipleObservabilitySourcesDeclared(
+            manifest_path
+        )
+    return declared[0]
+
+
+def _dispatch_fetch(
+    *,
+    source_kind: str,
+    observability: Observability,
+    case_dir: Path,
+    session_id: str,
+    since: datetime | None,
+    until: datetime | None,
+) -> FetchedObservability:
+    if source_kind == "langfuse":
+        assert observability.langfuse is not None
+        return fetch_langfuse_observability(
+            case_dir=case_dir,
+            source=observability.langfuse,
+            session_id=session_id,
+            since=since,
+            until=until,
+        )
+    assert observability.otel is not None
+    return fetch_otel_observability(
+        case_dir=case_dir,
+        source=observability.otel,
+        session_id=session_id,
+        since=since,
+        until=until,
+    )
+
+
 def _print_success_block(
     *,
+    source_kind: str,
     manifest_path: Path,
     case_id: str,
     case_dir: Path,
@@ -182,11 +240,12 @@ def _print_success_block(
     print(
         "\n".join(
             [
-                "LangFuse observability fetch: COMPLETE",
+                f"Observability fetch ({source_kind}): COMPLETE",
                 f"  manifest: {manifest_path}",
                 f"  case_id: {case_id}",
                 f"  case_dir: {case_dir}",
-                f"  host: {result.host}",
+                f"  source: {source_kind}",
+                f"  endpoint: {result.endpoint}",
                 f"  session_id: {result.session_id}",
                 f"  since: {_format_optional_timestamp(since)}",
                 f"  until: {_format_optional_timestamp(until)}",
@@ -315,10 +374,15 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
-        if manifest.observability.langfuse is None:
+        try:
+            source_kind = _select_source_kind(
+                manifest.observability,
+                manifest_path=args.path,
+            )
+        except ObservabilityFetcherError as exc:
             logger.error(
                 "%s",
-                LangfuseSourceNotDeclared(args.path),
+                exc,
                 extra={"manifest_path": str(args.path)},
             )
             return 1
@@ -331,9 +395,10 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             with metrics.phase("fetch_observability"):
-                result = fetch_langfuse_observability(
+                result = _dispatch_fetch(
+                    source_kind=source_kind,
+                    observability=manifest.observability,
                     case_dir=case_dir,
-                    source=manifest.observability.langfuse,
                     session_id=session_id,
                     since=args.since,
                     until=args.until,
@@ -345,11 +410,13 @@ def main(argv: list[str] | None = None) -> int:
                 extra={
                     "case_id": args.case,
                     "case_dir": str(case_dir),
+                    "source": source_kind,
                 },
             )
             return 1
 
         _print_success_block(
+            source_kind=source_kind,
             manifest_path=args.path,
             case_id=case.id,
             case_dir=case_dir,

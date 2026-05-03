@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from evaluate_agent.common.errors.observability_fetcher import (
+from evaluate_agent.common.errors.observability_fetchers import (
     LangfuseCredentialEnvVarMissing,
 )
 from evaluate_agent.manifest.schema import LangfuseSource
