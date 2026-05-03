@@ -92,13 +92,37 @@ def transform_observations_to_routing_decisions(
 def transform_observations_to_step_count(
     observations: Sequence[Mapping[str, Any]],
 ) -> StepCount:
-    generations = sorted(
+    # A reasoning step is one AGENT or TOOL span that the
+    # agent dispatched directly — i.e. whose parent is either
+    # the trace root or another AGENT span. This excludes
+    # nested TOOL-under-TOOL retries and intermediate
+    # GENERATIONs (which are LLM calls inside a step, not
+    # steps themselves), matching how operators count steps
+    # when reading a LangFuse trace tree.
+    agent_observation_ids: set[str] = {
+        observation_id
+        for observation_id in (
+            _string_or_none(obs.get("id"))
+            for obs in _observations_of_type(
+                observations, LANGFUSE_AGENT_TYPE
+            )
+        )
+        if observation_id is not None
+    }
+    step_observations = sorted(
         (
             obs
-            for obs in _observations_of_type(
-                observations, LANGFUSE_GENERATION_TYPE
+            for obs in observations
+            if _string_or_none(obs.get("type"))
+            in (
+                LANGFUSE_AGENT_TYPE,
+                LANGFUSE_TOOL_TYPE,
             )
-            if _string_or_none(obs.get("id")) is not None
+            and _string_or_none(obs.get("id")) is not None
+            and _step_parent_is_agent_or_root(
+                obs.get("parent_observation_id"),
+                agent_observation_ids=agent_observation_ids,
+            )
         ),
         key=lambda obs: _start_time_sort_key(
             obs.get("start_time")
@@ -106,12 +130,23 @@ def transform_observations_to_step_count(
     )
     span_ids = tuple(
         _string_or_none(obs.get("id"))  # type: ignore[misc]
-        for obs in generations
+        for obs in step_observations
     )
     return StepCount(
         total_steps=len(span_ids),
         step_span_ids=span_ids,
     )
+
+
+def _step_parent_is_agent_or_root(
+    parent_observation_id: Any,
+    *,
+    agent_observation_ids: set[str],
+) -> bool:
+    parent_id = _string_or_none(parent_observation_id)
+    if parent_id is None:
+        return True
+    return parent_id in agent_observation_ids
 
 
 def transform_observations_to_generations(
@@ -152,12 +187,11 @@ def transform_observations_to_generations(
                 total_cost_usd=_non_negative_float_or_none(
                     cost.get("total")
                 ),
-                latency_ms=_latency_ms(
-                    observation.get("start_time"),
-                    observation.get("end_time"),
-                ),
-                timestamp=_iso_timestamp_or_none(
+                started_at=_iso_timestamp_or_none(
                     observation.get("start_time")
+                ),
+                ended_at=_iso_timestamp_or_none(
+                    observation.get("end_time")
                 ),
             )
         )
@@ -243,29 +277,6 @@ def _non_negative_float_or_none(
         return None
     if isinstance(value, (int, float)) and value >= 0:
         return float(value)
-    return None
-
-
-def _latency_ms(start: Any, end: Any) -> int | None:
-    start_dt = _datetime_or_none(start)
-    end_dt = _datetime_or_none(end)
-    if start_dt is None or end_dt is None:
-        return None
-    delta = end_dt - start_dt
-    millis = int(delta.total_seconds() * 1000)
-    return millis if millis >= 0 else None
-
-
-def _datetime_or_none(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str) and value:
-        try:
-            return datetime.fromisoformat(
-                value.replace("Z", "+00:00")
-            )
-        except ValueError:
-            return None
     return None
 
 

@@ -16,6 +16,9 @@ from evaluate_agent.scoring.evaluators import (
     evaluate_max_total_cost_usd,
     evaluate_max_total_tokens,
     evaluate_must_call,
+    evaluate_must_call_exactly,
+    evaluate_must_call_in_order,
+    evaluate_must_call_with_args,
     evaluate_must_not_call,
     evaluate_must_route_to,
 )
@@ -55,6 +58,9 @@ class CaseScore(StrictFrozen):
                 "schema order: final_response_contains, "
                 "then must_call (per tool), then "
                 "must_not_call (per tool), then "
+                "must_call_exactly (per tool), then "
+                "must_call_with_args (per spec), then "
+                "must_call_in_order (one outcome), then "
                 "must_route_to, then max_steps, then "
                 "max_total_tokens, then "
                 "max_total_cost_usd, then max_latency_ms. "
@@ -121,6 +127,30 @@ def score_case(
     for tool in assertions.must_not_call:
         outcomes.append(
             evaluate_must_not_call(tool, case_dir=case_dir)
+        )
+
+    for tool, count in assertions.must_call_exactly.items():
+        outcomes.append(
+            evaluate_must_call_exactly(
+                tool,
+                count,
+                case_dir=case_dir,
+            )
+        )
+
+    for spec in assertions.must_call_with_args:
+        outcomes.append(
+            evaluate_must_call_with_args(
+                spec, case_dir=case_dir
+            )
+        )
+
+    if assertions.must_call_in_order:
+        outcomes.append(
+            evaluate_must_call_in_order(
+                assertions.must_call_in_order,
+                case_dir=case_dir,
+            )
         )
 
     if assertions.must_route_to is not None:

@@ -19,7 +19,7 @@ from evaluate_agent.scoring.resolvers.log_resolvers.generation_log import (  # n
 )
 
 from .utils import (
-    gate_generation_field_coverage,
+    gate_generation_interval_coverage,
     resolve_observability_log,
 )
 
@@ -38,30 +38,30 @@ def evaluate_max_latency_ms(
     )
     if isinstance(log, AssertionInconclusive):
         return log
-    # Coverage gate before sum: latency_ms is derived from the
-    # span's start_time / end_time, and traces with broken
-    # clocks or partial timestamping would otherwise undercount
-    # silently. Note: this still uses sum-of-per-generation
-    # latency, which double-counts parallel fan-out — that's
-    # tracked as a separate Session 4 fix (max latency should
-    # be wall-clock span, not sum).
-    contributions = gate_generation_field_coverage(
+    intervals = gate_generation_interval_coverage(
         log=log,
-        field_name="latency_ms",
         assertion_kind="max_latency_ms",
     )
-    if isinstance(contributions, AssertionInconclusive):
-        return contributions
-    observed = int(sum(contributions))
+    if isinstance(intervals, AssertionInconclusive):
+        return intervals
+    # Wall-clock interval: earliest start to latest end across
+    # the case's generations. Sum-of-per-generation latency
+    # would double-count parallel sub-agent fan-out and turn a
+    # 12-second wall-clock case into a 23-second false-fail
+    # against a 12000ms cap.
+    earliest_start = min(start for start, _ in intervals)
+    latest_end = max(end for _, end in intervals)
+    observed = int(
+        (latest_end - earliest_start).total_seconds() * 1000
+    )
     if observed <= latency_limit_ms:
         return AssertionPassed(
             assertion_kind="max_latency_ms",
             evidence=AssertionEvidence(
                 artifact_path=log.path,
                 detail=(
-                    f"observed {observed}ms total "
-                    f"generation latency across "
-                    f"{len(contributions)} "
+                    f"observed {observed}ms wall-clock "
+                    f"latency across {len(intervals)} "
                     f"generation(s) within limit of "
                     f"{latency_limit_ms}ms"
                 ),
@@ -74,9 +74,8 @@ def evaluate_max_latency_ms(
         evidence=AssertionEvidence(
             artifact_path=log.path,
             detail=(
-                f"observed {observed}ms total "
-                f"generation latency across "
-                f"{len(contributions)} "
+                f"observed {observed}ms wall-clock "
+                f"latency across {len(intervals)} "
                 f"generation(s) exceeding limit of "
                 f"{latency_limit_ms}ms"
             ),

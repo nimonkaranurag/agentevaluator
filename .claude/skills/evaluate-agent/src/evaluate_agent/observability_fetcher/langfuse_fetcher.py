@@ -46,10 +46,9 @@ class FetchedObservability:
     generation_count: int
     generations_with_tokens: int
     generations_with_cost: int
-    generations_with_latency: int
+    generations_with_interval: int
     total_tokens: int | None
     total_cost_usd: float | None
-    total_latency_ms: int | None
     written: WrittenObservabilityArtifacts
 
 
@@ -124,19 +123,17 @@ def fetch_langfuse_observability(
             for g in generations
             if g.total_cost_usd is not None
         ),
-        generations_with_latency=sum(
+        generations_with_interval=sum(
             1
             for g in generations
-            if g.latency_ms is not None
+            if g.started_at is not None
+            and g.ended_at is not None
         ),
         total_tokens=_optional_sum(
             g.total_tokens for g in generations
         ),
         total_cost_usd=_optional_sum(
             g.total_cost_usd for g in generations
-        ),
-        total_latency_ms=_optional_sum(
-            g.latency_ms for g in generations
         ),
         written=written,
     )

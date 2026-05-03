@@ -4,7 +4,7 @@ Pydantic schema for the agent manifest.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from evaluate_agent.common.types import StrictFrozen
 from evaluate_agent.manifest.api_version import (
@@ -414,15 +414,137 @@ class InteractionConfig(StrictFrozen):
     ]
 
 
+class CallSpec(StrictFrozen):
+    tool_name: Annotated[
+        Identifier,
+        Field(
+            description=(
+                "Name of the tool the agent must "
+                "invoke with the declared arguments. "
+                "Validated against tools_catalog when "
+                "the manifest declares one, same as "
+                "must_call."
+            ),
+        ),
+    ]
+    args: Annotated[
+        dict[str, Any],
+        Field(
+            description=(
+                "Argument shape the agent's call must "
+                "match. Matched as a deep subset of "
+                "the actual tool_calls.jsonl entry's "
+                "arguments object: every (key, value) "
+                "in this mapping must appear in the "
+                "captured arguments with an equal "
+                "value, recursing into nested "
+                "mappings. Extra keys on the captured "
+                "side are ignored — declare the keys "
+                "the assertion cares about and leave "
+                "the rest unspecified."
+            ),
+        ),
+    ]
+    min_count: Annotated[
+        int,
+        Field(
+            default=1,
+            ge=1,
+            description=(
+                "Minimum number of tool_calls.jsonl "
+                "entries that must match this spec for "
+                "the assertion to pass. Default 1; "
+                "raise to require repeated invocations."
+            ),
+        ),
+    ]
+
+
 class Assertions(StrictFrozen):
     must_call: list[Identifier] = Field(
-        default_factory=list
+        default_factory=list,
+        description=(
+            "Tools the agent must invoke at least once "
+            "for the case. One outcome per tool name. "
+            "Resolves against tool_calls.jsonl. Pair "
+            "with must_call_exactly when call count "
+            "matters and with must_call_with_args when "
+            "argument shape matters."
+        ),
     )
     must_not_call: list[Identifier] = Field(
-        default_factory=list
+        default_factory=list,
+        description=(
+            "Tools the agent must NOT invoke for the "
+            "case. One outcome per tool name. Resolves "
+            "against tool_calls.jsonl."
+        ),
+    )
+    must_call_exactly: dict[Identifier, int] = Field(
+        default_factory=dict,
+        description=(
+            "Tools the agent must invoke an exact "
+            "number of times for the case. Maps tool "
+            "name to required call count (>= 1). One "
+            "outcome per entry; failure cites the "
+            "observed count. Resolves against "
+            "tool_calls.jsonl. Use this when "
+            "redundant retries or skipped invocations "
+            "would change the answer (e.g. "
+            "lookup_employee_record exactly twice for "
+            "a two-employee case)."
+        ),
+    )
+    must_call_with_args: list[CallSpec] = Field(
+        default_factory=list,
+        description=(
+            "Tools the agent must invoke with specific "
+            "arguments for the case. Each CallSpec "
+            "names the tool, the expected arguments "
+            "subset (top-level keys recurse into "
+            "nested mappings), and an optional "
+            "min_count (default 1). One outcome per "
+            "CallSpec; passes when at least min_count "
+            "tool_calls.jsonl entries match the spec. "
+            "Use this to catch buggy agents that call "
+            "the right tool with the wrong arguments "
+            "(e.g. transfer_funds with the wrong "
+            "amount), which must_call alone cannot."
+        ),
+    )
+    must_call_in_order: list[Identifier] = Field(
+        default_factory=list,
+        description=(
+            "Tools whose names must appear in the "
+            "tool_calls.jsonl entries as a "
+            "(non-strict) subsequence in declaration "
+            "order. Other intervening calls are "
+            "allowed; the assertion only requires that "
+            "each named tool appears after the "
+            "previous. One whole-case outcome. Use "
+            "this when downstream tool calls depend on "
+            "earlier ones (e.g. lookup_employee_record "
+            "must run before list_paid_leave_days "
+            "because the latter consumes the former's "
+            "output)."
+        ),
     )
     must_route_to: Identifier | None = None
-    max_steps: int | None = Field(default=None, ge=1)
+    max_steps: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Inclusive upper bound on the number of "
+            "agent reasoning steps the case may "
+            "consume. A step is one AGENT- or "
+            "TOOL-typed observation whose direct "
+            "parent in the trace tree is the trace "
+            "root or another AGENT observation — "
+            "matching how an operator counts steps "
+            "when reading a LangFuse trace. Resolves "
+            "against step_count.json."
+        ),
+    )
     # SafeText on the substring guards the renderer: an attacker
     # who controls the manifest can't inject ANSI/NUL bytes that
     # would later be echoed verbatim into the Markdown report's
@@ -462,14 +584,18 @@ class Assertions(StrictFrozen):
         default=None,
         ge=1,
         description=(
-            "Inclusive upper bound on the sum of "
-            "latency_ms across every Generation "
-            "captured for the case (total LLM-generation "
-            "wall-clock time). Resolves against "
-            "generations.jsonl — trace-backend only. "
-            "Inconclusive when generations.jsonl is "
-            "absent OR when generations carry no "
-            "start/end timestamps."
+            "Inclusive upper bound on the case's "
+            "wall-clock LLM-generation latency, "
+            "computed as max(ended_at) - "
+            "min(started_at) across the case's "
+            "generations. This anchors on real elapsed "
+            "time, so parallel sub-agent fan-out (two "
+            "generations running concurrently) "
+            "contributes once, not twice. Resolves "
+            "against generations.jsonl — trace-backend "
+            "only. Inconclusive when generations.jsonl "
+            "is absent OR when any generation lacks a "
+            "started_at / ended_at pair."
         ),
     )
 
@@ -484,6 +610,23 @@ class Assertions(StrictFrozen):
             raise ValueError(
                 f"must_call and must_not_call overlap: {sorted(overlap)}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _must_call_exactly_counts_are_positive(
+        self,
+    ) -> "Assertions":
+        for (
+            tool_name,
+            count,
+        ) in self.must_call_exactly.items():
+            if count < 1:
+                raise ValueError(
+                    f"must_call_exactly[{tool_name!r}] = "
+                    f"{count}: required call count must "
+                    f"be >= 1. Use must_not_call to "
+                    f"forbid a tool entirely."
+                )
         return self
 
 
@@ -505,6 +648,9 @@ class Case(StrictFrozen):
         if not (
             a.must_call
             or a.must_not_call
+            or a.must_call_exactly
+            or a.must_call_with_args
+            or a.must_call_in_order
             or a.must_route_to is not None
             or a.max_steps is not None
             or a.final_response_contains is not None
@@ -517,8 +663,10 @@ class Case(StrictFrozen):
                 f"declares no checks. Every case must "
                 f"declare at least one assertion under "
                 f"any of must_call, must_not_call, "
-                f"must_route_to, max_steps, "
-                f"final_response_contains, "
+                f"must_call_exactly, "
+                f"must_call_with_args, "
+                f"must_call_in_order, must_route_to, "
+                f"max_steps, final_response_contains, "
                 f"max_total_tokens, max_total_cost_usd, "
                 f"max_latency_ms — a case with no "
                 f"checks would silently pass scoring."
@@ -589,15 +737,31 @@ class AgentManifestV1(StrictFrozen):
         if self.tools_catalog:
             allowed_tools = set(self.tools_catalog)
             for case in self.cases:
-                for name in case.assertions.must_call:
+                a = case.assertions
+                for name in a.must_call:
                     if name not in allowed_tools:
                         raise ValueError(
                             f"case {case.id!r}: must_call references undeclared tool {name!r}"
                         )
-                for name in case.assertions.must_not_call:
+                for name in a.must_not_call:
                     if name not in allowed_tools:
                         raise ValueError(
                             f"case {case.id!r}: must_not_call references undeclared tool {name!r}"
+                        )
+                for name in a.must_call_exactly:
+                    if name not in allowed_tools:
+                        raise ValueError(
+                            f"case {case.id!r}: must_call_exactly references undeclared tool {name!r}"
+                        )
+                for spec in a.must_call_with_args:
+                    if spec.tool_name not in allowed_tools:
+                        raise ValueError(
+                            f"case {case.id!r}: must_call_with_args references undeclared tool {spec.tool_name!r}"
+                        )
+                for name in a.must_call_in_order:
+                    if name not in allowed_tools:
+                        raise ValueError(
+                            f"case {case.id!r}: must_call_in_order references undeclared tool {name!r}"
                         )
         if self.agents_catalog:
             allowed_agents = set(self.agents_catalog)
@@ -637,6 +801,7 @@ __all__ = [
     "Auth",
     "BasicAuth",
     "BearerAuth",
+    "CallSpec",
     "Case",
     "Identifier",
     "InteractionConfig",

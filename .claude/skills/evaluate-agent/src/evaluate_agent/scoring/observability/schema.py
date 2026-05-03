@@ -301,30 +301,38 @@ class Generation(StrictFrozen):
             ),
         ),
     ]
-    latency_ms: Annotated[
-        NonNegativeInt | None,
-        Field(
-            default=None,
-            description=(
-                "Wall-clock duration of the generation "
-                "in milliseconds, derived from "
-                "end_time - start_time on the source "
-                "span. The max_latency_ms assertion sums "
-                "this across the case's generations to "
-                "compare against a per-case cap."
-            ),
-        ),
-    ]
-    timestamp: Annotated[
+    started_at: Annotated[
         str | None,
         Field(
             default=None,
             min_length=1,
             description=(
                 "ISO-8601 start timestamp of the "
-                "generation. Optional because not every "
-                "observability source emits a timestamp "
-                "per generation."
+                "generation. Paired with ended_at to "
+                "anchor the generation on the case's "
+                "wall-clock timeline; the max_latency_ms "
+                "assertion takes the earliest started_at "
+                "across the case's generations as the "
+                "lower bound of the wall-clock interval. "
+                "Optional because not every observability "
+                "source emits a start timestamp."
+            ),
+        ),
+    ]
+    ended_at: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "ISO-8601 end timestamp of the "
+                "generation. Paired with started_at; the "
+                "max_latency_ms assertion takes the "
+                "latest ended_at across the case's "
+                "generations as the upper bound of the "
+                "wall-clock interval. Optional because "
+                "not every observability source emits an "
+                "end timestamp."
             ),
         ),
     ]
